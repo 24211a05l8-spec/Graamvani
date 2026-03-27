@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import { User, Bulletin, CallLog, Farmer } from './models/index.js';
 import { initCronJobs } from './cron.js';
 import { generateAudioBulletin } from './services/ttsService.js';
+import exotelRouter from './exotel_ivr.js';
 
 dotenv.config();
 
@@ -21,6 +22,9 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Note: Firebase is initialized in firebase.js and imported via models/index.js
+
+// 2. MIDDLEWARE & ROUTES
+app.use('/api/ivr', exotelRouter); // specialized exotel route
 
 // --- API ROUTES ---
 
