@@ -1,0 +1,119 @@
+.bulletins-page {
+  padding-top: 100px;
+  padding-bottom: 60px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.page-sub {
+  color: var(--text-300);
+  font-size: 15px;
+}
+
+.active-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.summary-val {
+  display: block;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.bulletin-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  background: var(--bg-700);
+  border: 1px solid var(--border);
+  color: var(--text-300);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.icon-btn:hover {
+  background: var(--bg-600);
+  color: var(--text-100);
+  border-color: var(--border-hover);
+}
+
+.icon-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  max-width: 600px;
+  width: 100%;
+}
+
+.modal-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+  .active-summary {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
