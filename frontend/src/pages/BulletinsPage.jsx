@@ -9,10 +9,11 @@ export default function BulletinsPage() {
   const [bulletins, setBulletins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [newBulletin, setNewBulletin] = useState({
     title: '',
     textSeed: '',
-    language: 'Hindi (Standard)',
+    language: 'Hindi',
     voiceTone: 'Professional Radio'
   });
 
@@ -32,12 +33,22 @@ export default function BulletinsPage() {
   };
 
   const handleCreate = async () => {
+    if (!newBulletin.title || !newBulletin.textSeed) return;
+    setGenerating(true);
     try {
       await axios.post(`${API_BASE_URL}/bulletins`, newBulletin);
       setShowModal(false);
+      setNewBulletin({
+        title: '',
+        textSeed: '',
+        language: 'Hindi',
+        voiceTone: 'Professional Radio'
+      });
       fetchBulletins();
     } catch (err) {
       console.error('Error creating bulletin:', err);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -191,8 +202,20 @@ export default function BulletinsPage() {
             </div>
 
             <div className="modal-actions" style={{marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
-              <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleCreate}>Generate Audio</button>
+              <button 
+                className="btn btn-ghost" 
+                onClick={() => setShowModal(false)}
+                disabled={generating}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleCreate}
+                disabled={generating}
+              >
+                {generating ? 'AI Generating Voice...' : 'Generate AI Audio'}
+              </button>
             </div>
           </div>
         </div>

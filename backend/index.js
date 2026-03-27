@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import morgan from 'morgan';
 import { User, Bulletin, CallLog, Farmer } from './models/index.js';
 import { initCronJobs } from './cron.js';
+import { generateAudioBulletin } from './services/ttsService.js';
 
 dotenv.config();
 
@@ -38,14 +39,30 @@ app.get('/api/bulletins', async (req, res) => {
 });
 
 app.post('/api/bulletins', async (req, res) => {
+  const { title, textSeed, language } = req.body;
   try {
+    console.log(`🎙️ Creating bulletin: ${title} (${language})`);
+    
+    // 1. Trigger AI Voice Generation
+    const aiAudio = await generateAudioBulletin(textSeed, language);
+
+    // 2. Save to Firestore
     const data = {
-      ...req.body,
+      title,
+      textSeed,
+      language,
+      audioUrl: aiAudio.url,
+      duration: aiAudio.duration,
+      isActive: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     };
+
     const docRef = await Bulletin.add(data);
+    console.log(`✅ Bulletin created with AI Voice: ${docRef.id}`);
+    
     res.status(201).json({ id: docRef.id, ...data });
   } catch (err) {
+    console.error('Bulletin creation error:', err);
     res.status(400).json({ error: err.message });
   }
 });
