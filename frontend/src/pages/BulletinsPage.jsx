@@ -1,16 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Plus, Radio, Clock, Languages, Globe, Play, FileAudio, Trash2, Edit2, CheckCircle2 } from 'lucide-react';
 import './BulletinsPage.css';
 
-const MOCK_BULLETINS = [
-  { id: 1, title: 'Morning News Bulletin - Bihar', date: 'Oct 24, 2025', lang: 'Hindi / Bhojpuri', plays: '1,240', status: 'Active' },
-  { id: 2, title: 'Agricultural Weather Update', date: 'Oct 24, 2025', lang: 'Hindi', plays: '842', status: 'Active' },
-  { id: 3, title: 'State Welfare Schemes (PM-KISAN)', date: 'Oct 23, 2025', lang: 'All Regional', plays: '4,560', status: 'Archived' },
-  { id: 4, title: 'Groundwater Level Advisory', date: 'Oct 22, 2025', lang: 'Telugu', plays: '930', status: 'Archived' },
-];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 export default function BulletinsPage() {
+  const [bulletins, setBulletins] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [newBulletin, setNewBulletin] = useState({
+    title: '',
+    textSeed: '',
+    language: 'Hindi (Standard)',
+    voiceTone: 'Professional Radio'
+  });
+
+  useEffect(() => {
+    fetchBulletins();
+  }, []);
+
+  const fetchBulletins = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/bulletins`);
+      setBulletins(res.data);
+    } catch (err) {
+      console.error('Error fetching bulletins:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      await axios.post(`${API_BASE_URL}/bulletins`, newBulletin);
+      setShowModal(false);
+      fetchBulletins();
+    } catch (err) {
+      console.error('Error creating bulletin:', err);
+    }
+  };
 
   return (
     <div className="bulletins-page container">
@@ -62,43 +91,45 @@ export default function BulletinsPage() {
           </div>
           
           <div className="bulletins-table-wrap">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Bulletin Name</th>
-                  <th>Published</th>
-                  <th>Language</th>
-                  <th>Total Plays</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {MOCK_BULLETINS.map((b) => (
-                  <tr key={b.id}>
-                    <td>
-                      <div className="bulletin-name">
-                        <FileAudio size={16} color="var(--text-muted)" />
-                        {b.title}
-                      </div>
-                    </td>
-                    <td>{b.date}</td>
-                    <td><span className="badge badge-purple">{b.lang}</span></td>
-                    <td>{b.plays}</td>
-                    <td>
-                      <span className={`badge ${b.status === 'Active' ? 'badge-green' : 'badge-orange'}`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="actions-cell">
-                      <button className="icon-btn" title="Play Demo"><Play size={14} /></button>
-                      <button className="icon-btn" title="Edit Content"><Edit2 size={14} /></button>
-                      <button className="icon-btn delete" title="Delete"><Trash2 size={14} /></button>
-                    </td>
+            {loading ? (
+              <div className="loading-state">Loading bulletins...</div>
+            ) : (
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Bulletin Name</th>
+                    <th>Published</th>
+                    <th>Language</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {bulletins.map((b) => (
+                    <tr key={b.id}>
+                      <td>
+                        <div className="bulletin-name">
+                          <FileAudio size={16} color="var(--text-muted)" />
+                          {b.title}
+                        </div>
+                      </td>
+                      <td>{new Date(b.createdAt?._seconds * 1000 || b.createdAt).toLocaleDateString()}</td>
+                      <td><span className="badge badge-purple">{b.language}</span></td>
+                      <td>
+                        <span className={`badge ${b.isActive !== false ? 'badge-green' : 'badge-orange'}`}>
+                          {b.isActive !== false ? 'Active' : 'Draft'}
+                        </span>
+                      </td>
+                      <td className="actions-cell">
+                        <button className="icon-btn" title="Play Demo"><Play size={14} /></button>
+                        <button className="icon-btn" title="Edit Content"><Edit2 size={14} /></button>
+                        <button className="icon-btn delete" title="Delete"><Trash2 size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
@@ -111,18 +142,34 @@ export default function BulletinsPage() {
             
             <div className="form-group" style={{marginTop: '20px'}}>
               <label className="form-label">Title</label>
-              <input type="text" className="form-input" placeholder="e.g. Weekly Market Rates" />
+              <input 
+                type="text" 
+                className="form-input" 
+                placeholder="e.g. Weekly Market Rates" 
+                value={newBulletin.title}
+                onChange={(e) => setNewBulletin({...newBulletin, title: e.target.value})}
+              />
             </div>
 
             <div className="form-group" style={{marginTop: '15px'}}>
               <label className="form-label">News Seed (Text or URL)</label>
-              <textarea className="form-input" rows="4" placeholder="Paste local news content here or an RSS feed URL..."></textarea>
+              <textarea 
+                className="form-input" 
+                rows="4" 
+                placeholder="Paste local news content here or an RSS feed URL..."
+                value={newBulletin.textSeed}
+                onChange={(e) => setNewBulletin({...newBulletin, textSeed: e.target.value})}
+              ></textarea>
             </div>
 
             <div className="grid-2" style={{marginTop: '15px'}}>
               <div className="form-group">
                 <label className="form-label">Target Language</label>
-                <select className="form-select">
+                <select 
+                  className="form-select"
+                  value={newBulletin.language}
+                  onChange={(e) => setNewBulletin({...newBulletin, language: e.target.value})}
+                >
                   <option>Hindi (Standard)</option>
                   <option>Bhojpuri</option>
                   <option>Maithili</option>
@@ -132,7 +179,11 @@ export default function BulletinsPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Voice Tone</label>
-                <select className="form-select">
+                <select 
+                  className="form-select"
+                  value={newBulletin.voiceTone}
+                  onChange={(e) => setNewBulletin({...newBulletin, voiceTone: e.target.value})}
+                >
                   <option>Professional Radio</option>
                   <option>Folk Storyteller</option>
                   <option>Friendly Neighbor</option>
@@ -142,7 +193,7 @@ export default function BulletinsPage() {
 
             <div className="modal-actions" style={{marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
               <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary">Generate Audio</button>
+              <button className="btn btn-primary" onClick={handleCreate}>Generate Audio</button>
             </div>
           </div>
         </div>

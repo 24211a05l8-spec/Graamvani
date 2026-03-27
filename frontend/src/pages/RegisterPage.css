@@ -132,6 +132,14 @@
   margin-top: 10px;
 }
 
+.input-tip {
+  font-size: 11px;
+  color: var(--primary-light);
+  margin-top: 4px;
+  display: block;
+  font-style: italic;
+}
+
 /* Success State */
 .register-success {
   display: flex;

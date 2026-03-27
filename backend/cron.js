@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import admin from 'firebase-admin';
 import { fetchLatestNews, formatNewsForTTS } from './services/newsService.js';
 import { generateAudioBulletin } from './services/ttsService.js';
 import { Bulletin } from './models/index.js';
@@ -19,16 +20,18 @@ export const initCronJobs = () => {
         const script = formatNewsForTTS(news);
         const audio = await generateAudioBulletin(script);
         
-        const newBulletin = new Bulletin({
+        const data = {
           title: `Daily Morning Bulletin - ${region}`,
           audioUrl: audio.url,
           textSeed: script,
           language: 'Hindi',
           region: region,
-          type: 'news'
-        });
+          type: 'news',
+          isActive: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
         
-        await newBulletin.save();
+        await Bulletin.add(data);
         console.log(`✅ Bulletin created for ${region}`);
       }
     } catch (err) {

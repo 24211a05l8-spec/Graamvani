@@ -1,5 +1,5 @@
 import express from 'express';
-import mongoose from 'mongoose';
+import admin from 'firebase-admin';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
@@ -19,21 +19,18 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Database Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graamvaani';
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+// Note: Firebase is initialized in firebase.js and imported via models/index.js
 
 // --- API ROUTES ---
 
 // Health Check
-app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'GraamVaani API is alive' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'GraamVaani API is alive (Firebase Edition)' }));
 
 // 1. BULLETINS
 app.get('/api/bulletins', async (req, res) => {
   try {
-    const bulletins = await Bulletin.find().sort({ createdAt: -1 });
+    const snapshot = await Bulletin.orderBy('createdAt', 'desc').get();
+    const bulletins = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(bulletins);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -42,9 +39,12 @@ app.get('/api/bulletins', async (req, res) => {
 
 app.post('/api/bulletins', async (req, res) => {
   try {
-    const bulletin = new Bulletin(req.body);
-    await bulletin.save();
-    res.status(201).json(bulletin);
+    const data = {
+      ...req.body,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    const docRef = await Bulletin.add(data);
+    res.status(201).json({ id: docRef.id, ...data });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -53,9 +53,14 @@ app.post('/api/bulletins', async (req, res) => {
 // 2. USERS / PANCHAYATS
 app.post('/api/register', async (req, res) => {
   try {
-    const user = new User(req.body);
-    await user.save();
-    res.status(201).json({ message: 'Registration successful', user });
+    const data = {
+      ...req.body,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isVerified: false,
+      role: 'panchayat'
+    };
+    const docRef = await User.add(data);
+    res.status(201).json({ message: 'Registration successful', id: docRef.id, user: data });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -63,17 +68,19 @@ app.post('/api/register', async (req, res) => {
 
 app.get('/api/stats', async (req, res) => {
   try {
-    const farmerCount = await Farmer.countDocuments();
-    const callCountToday = await CallLog.countDocuments({
-      timestamp: { $gte: new Date().setHours(0,0,0,0) }
-    });
-    const activeBulletins = await Bulletin.countDocuments({ isActive: true });
+    const farmerSnapshot = await Farmer.count().get();
+    const activeBulletinsSnapshot = await Bulletin.where('isActive', '==', true).count().get();
+    
+    // For call count today, we need a date check
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const callsTodaySnapshot = await CallLog.where('timestamp', '>=', today).count().get();
     
     res.json({
-      totalFarmers: farmerCount,
-      callsToday: callCountToday,
-      activeBulletins,
-      listenTime: '2m 45s' // Mocked for now
+      totalFarmers: farmerSnapshot.data().count,
+      callsToday: callsTodaySnapshot.data().count,
+      activeBulletins: activeBulletinsSnapshot.data().count,
+      listenTime: '2m 45s' // Mocked
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -85,16 +92,22 @@ app.post('/api/ivr/missed-call', async (req, res) => {
   const from = req.body.From;
   console.log(`🎙️ Missed call received from: ${from}`);
   
-  // 1. Log the call
-  const log = new CallLog({ phoneNumber: from, status: 'missed' });
-  await log.save();
+  try {
+    // 1. Log the call
+    await CallLog.add({
+      phoneNumber: from,
+      status: 'missed',
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (err) {
+    console.error('Error logging call:', err);
+  }
 
   // 2. In a real Twilio setup, we'd trigger an Outbound Dial (Callback)
-  // For now, we return TwiML to acknowledge (though missed calls shouldn't connect)
   res.type('text/xml');
   res.send('<Response><Reject /></Response>');
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 GraamVaani Server running on port ${PORT}`);
+  console.log(`🚀 GraamVaani Server (Firebase) running on port ${PORT}`);
 });

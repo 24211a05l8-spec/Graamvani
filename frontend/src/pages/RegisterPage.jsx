@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import axios from 'axios';
 import { UserPlus, Upload, CheckCircle2, ShieldCheck, MapPin, Phone, Users } from 'lucide-react';
 import './RegisterPage.css';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 export default function RegisterPage() {
   const [step, setStep] = useState(1);
@@ -8,21 +11,68 @@ export default function RegisterPage() {
     panchayatName: '',
     district: '',
     state: '',
+    pincode: '',
+    village: '',
     contactPerson: '',
     contactPhone: '',
     farmerCount: ''
   });
 
+  const [villages, setVillages] = useState([]);
+  const [loadingPincode, setLoadingPincode] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handlePincodeChange = async (e) => {
+    const pin = e.target.value;
+    setFormData(prev => ({ ...prev, pincode: pin }));
+
+    if (pin.length === 6) {
+      setLoadingPincode(true);
+      try {
+        const response = await axios.get(`https://api.postalpincode.in/pincode/${pin}`);
+        const data = response.data[0];
+        
+        if (data && data.Status === "Success") {
+          const postOffices = data.PostOffice;
+          const first = postOffices[0];
+          
+          setFormData(prev => ({
+            ...prev,
+            state: first.State,
+            district: first.District,
+            pincode: pin
+          }));
+          
+          setVillages(postOffices.map(po => po.Name));
+          setError(null);
+        } else {
+          setError("Invalid PIN Code");
+          setVillages([]);
+        }
+      } catch (err) {
+        console.error("PIN lookup error:", err);
+        setError("Could not fetch PIN details");
+      } finally {
+        setLoadingPincode(false);
+      }
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
-    // In a real app, this would hit /api/register
+    try {
+      await axios.post(`${API_BASE_URL}/register`, formData);
+      setSubmitted(true);
+      setError(null);
+    } catch (err) {
+      console.error('Registration error:', err);
+      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+    }
   };
 
   if (submitted) {
@@ -118,23 +168,52 @@ export default function RegisterPage() {
 
             <div className="grid-2">
               <div className="form-group">
+                <label className="form-label">PIN Code</label>
+                <input 
+                  type="text" name="pincode" className="form-input" 
+                  placeholder="6-digit PIN" required 
+                  maxLength="6"
+                  onChange={handlePincodeChange}
+                  value={formData.pincode}
+                />
+                {loadingPincode && <span className="input-tip">Fetching location...</span>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Village / Post Office</label>
+                {villages.length > 0 ? (
+                  <select name="village" className="form-select" required onChange={handleChange} value={formData.village}>
+                    <option value="">Select Village</option>
+                    {villages.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                ) : (
+                  <input 
+                    type="text" name="village" className="form-input" 
+                    placeholder="Enter Village Name" required 
+                    onChange={handleChange}
+                    value={formData.village}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="grid-2">
+              <div className="form-group">
                 <label className="form-label">District</label>
                 <input 
                   type="text" name="district" className="form-input" 
                   placeholder="e.g. Muzaffarpur" required 
                   onChange={handleChange}
+                  value={formData.district}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">State</label>
-                <select name="state" className="form-select" required onChange={handleChange}>
-                  <option value="">Select State</option>
-                  <option value="Bihar">Bihar</option>
-                  <option value="Uttar Pradesh">Uttar Pradesh</option>
-                  <option value="Madhya Pradesh">Madhya Pradesh</option>
-                  <option value="Rajasthan">Rajasthan</option>
-                  <option value="Andhra Pradesh">Andhra Pradesh</option>
-                </select>
+                <input 
+                  type="text" name="state" className="form-input" 
+                  placeholder="State" required 
+                  onChange={handleChange}
+                  value={formData.state}
+                />
               </div>
             </div>
 
@@ -168,6 +247,7 @@ export default function RegisterPage() {
               <p>After verification, you can bulk-upload farmer phone numbers via Excel/CSV in the dashboard.</p>
             </div>
 
+            {error && <div className="error-message" style={{color: 'var(--red)', marginBottom: '15px'}}>{error}</div>}
             <button type="submit" className="btn btn-primary btn-lg w-full" style={{marginTop: '10px', width: '100%', justifyContent: 'center'}}>
               Submit Registration
             </button>
