@@ -41,12 +41,24 @@ export default function RegisterPage() {
           const postOffices = data.PostOffice;
           const first = postOffices[0];
           
-          setFormData(prev => ({
-            ...prev,
-            state: first.State,
-            district: first.District,
-            pincode: pin
-          }));
+          setFormData(prev => {
+            const newState = first.State;
+            let autoLanguage = 'Hindi';
+            
+            if (newState === 'Karnataka') {
+              autoLanguage = 'Kannada';
+            } else if (newState === 'Andhra Pradesh' || newState === 'Telangana') {
+              autoLanguage = 'Telugu';
+            }
+
+            return {
+              ...prev,
+              state: newState,
+              district: first.District,
+              pincode: pin,
+              language: autoLanguage
+            };
+          });
           
           setVillages(postOffices.map(po => po.Name));
           setError(null);
@@ -287,9 +299,7 @@ export default function RegisterPage() {
                 name="language" className="form-select" required 
                 onChange={handleChange} value={formData.language}
               >
-                <option value="Hindi (Standard)">Hindi (Standard)</option>
-                <option value="Bhojpuri">Bhojpuri</option>
-                <option value="Maithili">Maithili</option>
+                <option value="Hindi">Hindi</option>
                 <option value="Telugu">Telugu</option>
                 <option value="Kannada">Kannada</option>
               </select>

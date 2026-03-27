@@ -85,7 +85,8 @@ export default function BulletinsPage() {
               <select className="form-select btn-sm">
                 <option>All Languages</option>
                 <option>Hindi</option>
-                <option>Bhojpuri</option>
+                <option>Telugu</option>
+                <option>Kannada</option>
               </select>
             </div>
           </div>
@@ -170,11 +171,9 @@ export default function BulletinsPage() {
                   value={newBulletin.language}
                   onChange={(e) => setNewBulletin({...newBulletin, language: e.target.value})}
                 >
-                  <option>Hindi (Standard)</option>
-                  <option>Bhojpuri</option>
-                  <option>Maithili</option>
-                  <option>Telugu</option>
-                  <option>Kannada</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="Telugu">Telugu</option>
+                  <option value="Kannada">Kannada</option>
                 </select>
               </div>
               <div className="form-group">
