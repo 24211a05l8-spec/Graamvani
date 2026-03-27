@@ -50,18 +50,31 @@ app.post('/api/bulletins', async (req, res) => {
   }
 });
 
-// 2. USERS / PANCHAYATS
+// 2. USERS / PANCHAYATS / FARMERS
 app.post('/api/register', async (req, res) => {
   try {
+    const { registrationType, ...formData } = req.body;
+    
     const data = {
-      ...req.body,
+      ...formData,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      isVerified: false,
-      role: 'panchayat'
+      isVerified: false
     };
-    const docRef = await User.add(data);
-    res.status(201).json({ message: 'Registration successful', id: docRef.id, user: data });
+
+    if (registrationType === 'individual') {
+      // Register as a Farmer
+      data.role = 'farmer';
+      // Normalize individual fields if necessary (already handled by formData)
+      const docRef = await Farmer.add(data);
+      res.status(201).json({ message: 'Individual registration successful', id: docRef.id, user: data });
+    } else {
+      // Register as a Panchayat (User)
+      data.role = 'panchayat';
+      const docRef = await User.add(data);
+      res.status(201).json({ message: 'Panchayat registration successful', id: docRef.id, user: data });
+    }
   } catch (err) {
+    console.error('Registration backend error:', err);
     res.status(400).json({ error: err.message });
   }
 });

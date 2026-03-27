@@ -7,6 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 
 export default function RegisterPage() {
   const [step, setStep] = useState(1);
+  const [registrationType, setRegistrationType] = useState('panchayat'); // 'panchayat' or 'individual'
   const [formData, setFormData] = useState({
     panchayatName: '',
     district: '',
@@ -15,7 +16,9 @@ export default function RegisterPage() {
     village: '',
     contactPerson: '',
     contactPhone: '',
-    farmerCount: ''
+    farmerCount: '',
+    name: '', // for individual
+    phone: '' // for individual
   });
 
   const [villages, setVillages] = useState([]);
@@ -66,7 +69,11 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_BASE_URL}/register`, formData);
+      const payload = {
+        ...formData,
+        registrationType
+      };
+      await axios.post(`${API_BASE_URL}/register`, payload);
       setSubmitted(true);
       setError(null);
     } catch (err) {
@@ -83,19 +90,27 @@ export default function RegisterPage() {
             <CheckCircle2 size={64} color="var(--accent)" />
           </div>
           <h1>Registration Received!</h1>
-          <p>We've received the request for <strong>{formData.panchayatName}</strong>.</p>
+          <p>
+            {registrationType === 'panchayat' 
+              ? `We've received the request for ${formData.panchayatName}.`
+              : `Welcome to GraamVaani, ${formData.name}!`}
+          </p>
           <div className="success-details">
             <div className="detail-item">
-              <span className="detail-label">District</span>
-              <span className="detail-value">{formData.district}, {formData.state}</span>
+              <span className="detail-label">Location</span>
+              <span className="detail-value">{formData.village}, {formData.district}</span>
             </div>
-            <div className="detail-item">
-              <span className="detail-label">Farmers</span>
-              <span className="detail-value">{formData.farmerCount} to be registered</span>
-            </div>
+            {registrationType === 'panchayat' && (
+              <div className="detail-item">
+                <span className="detail-label">Farmers</span>
+                <span className="detail-value">{formData.farmerCount} to be registered</span>
+              </div>
+            )}
           </div>
           <p className="next-steps-text">
-            A GraamVaani representative will call <strong>{formData.contactPhone}</strong> within 24 hours to verify the Panchayat credentials and set up the voice gateway.
+            {registrationType === 'panchayat' 
+              ? `A GraamVaani representative will call ${formData.contactPhone} within 24 hours to verify Panchayat credentials.`
+              : `You'll receive a welcome call at ${formData.phone} shortly with your first audio bulletin.`}
           </p>
           <button className="btn btn-primary" onClick={() => window.location.href = '/'}>
             Back to Home
@@ -106,13 +121,23 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="register-page container">
+    <div className="register-page container" style={{ paddingTop: '180px' }}>
       <div className="register-grid">
         <div className="register-info">
-          <span className="badge badge-orange">For Local Leaders</span>
-          <h1 className="register-title">Register Your <span className="gradient-text">Village Cluster</span></h1>
+          <span className="badge badge-orange">
+            {registrationType === 'panchayat' ? 'For Local Leaders' : 'For Everyone'}
+          </span>
+          <h1 className="register-title">
+            {registrationType === 'panchayat' ? (
+              <>Register Your <span className="gradient-text">Village Cluster</span></>
+            ) : (
+              <>Join the <span className="gradient-text">Voice Revolution</span></>
+            )}
+          </h1>
           <p className="register-subtitle">
-            Empower your community with on-demand voice news. One registration covers all farmers in your jurisdiction.
+            {registrationType === 'panchayat' 
+              ? 'Empower your community with on-demand voice news. One registration covers all farmers in your jurisdiction.'
+              : 'Listen to hyper-local news and government alerts on any phone. No internet required.'}
           </p>
 
           <div className="perks-list">
@@ -142,29 +167,67 @@ export default function RegisterPage() {
 
         <div className="register-form-wrap">
           <form className="card register-form" onSubmit={handleSubmit}>
+            <div className="registration-type-toggle">
+              <button 
+                type="button" 
+                className={`toggle-btn ${registrationType === 'panchayat' ? 'active' : ''}`}
+                onClick={() => setRegistrationType('panchayat')}
+              >
+                Village Leader
+              </button>
+              <button 
+                type="button" 
+                className={`toggle-btn ${registrationType === 'individual' ? 'active' : ''}`}
+                onClick={() => setRegistrationType('individual')}
+              >
+                Individual Farmer
+              </button>
+            </div>
+
             <div className="form-header">
-              <h3>Panchayat Details</h3>
+              <h3>{registrationType === 'panchayat' ? 'Panchayat Details' : 'Personal Details'}</h3>
               <p>Step {step} of 1</p>
             </div>
 
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Panchayat Name</label>
-                <input 
-                  type="text" name="panchayatName" className="form-input" 
-                  placeholder="e.g. Rampur Gram Panchayat" required 
-                  onChange={handleChange}
-                />
+            {registrationType === 'panchayat' ? (
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Panchayat Name</label>
+                  <input 
+                    type="text" name="panchayatName" className="form-input" 
+                    placeholder="e.g. Rampur Gram Panchayat" required 
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Total Farmers</label>
+                  <input 
+                    type="number" name="farmerCount" className="form-input" 
+                    placeholder="e.g. 450" required 
+                    onChange={handleChange}
+                  />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Total Farmers</label>
-                <input 
-                  type="number" name="farmerCount" className="form-input" 
-                  placeholder="e.g. 450" required 
-                  onChange={handleChange}
-                />
+            ) : (
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input 
+                    type="text" name="name" className="form-input" 
+                    placeholder="e.g. Rajesh Kumar" required 
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <input 
+                    type="tel" name="phone" className="form-input" 
+                    placeholder="10-digit mobile" required 
+                    onChange={handleChange}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="grid-2">
               <div className="form-group">
@@ -217,39 +280,40 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="divider" style={{margin: '10px 0'}} />
-
-            <div className="form-header">
-              <h3>Primary Contact</h3>
-            </div>
-
-            <div className="grid-2">
-              <div className="form-group">
-                <label className="form-label">Sarpanch / Secretary Name</label>
-                <input 
-                  type="text" name="contactPerson" className="form-input" 
-                  placeholder="Full Name" required 
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Contact Number</label>
-                <input 
-                  type="tel" name="contactPhone" className="form-input" 
-                  placeholder="10-digit mobile" required 
-                  onChange={handleChange}
-                />
-              </div>
-            </div>
-
-            <div className="bulk-upload-note">
-              <div className="icon"><Upload size={16} /></div>
-              <p>After verification, you can bulk-upload farmer phone numbers via Excel/CSV in the dashboard.</p>
-            </div>
+            {registrationType === 'panchayat' && (
+              <>
+                <div className="divider" style={{margin: '10px 0'}} />
+                <div className="form-header">
+                  <h3>Primary Contact</h3>
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Sarpanch / Secretary Name</label>
+                    <input 
+                      type="text" name="contactPerson" className="form-input" 
+                      placeholder="Full Name" required 
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Contact Number</label>
+                    <input 
+                      type="tel" name="contactPhone" className="form-input" 
+                      placeholder="10-digit mobile" required 
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+                <div className="bulk-upload-note">
+                  <div className="icon"><Upload size={16} /></div>
+                  <p>After verification, you can bulk-upload farmer phone numbers via Excel/CSV in the dashboard.</p>
+                </div>
+              </>
+            )}
 
             {error && <div className="error-message" style={{color: 'var(--red)', marginBottom: '15px'}}>{error}</div>}
             <button type="submit" className="btn btn-primary btn-lg w-full" style={{marginTop: '10px', width: '100%', justifyContent: 'center'}}>
-              Submit Registration
+              Submit {registrationType === 'panchayat' ? 'Panchayat' : 'Registration'}
             </button>
             <p className="form-footer-tip">
               By submitting, you agree to our terms for community broadcasting.
