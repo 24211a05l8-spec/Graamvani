@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Plus, Radio, Clock, Languages, Globe, Play, FileAudio, Trash2, Edit2, CheckCircle2 } from 'lucide-react';
 import './BulletinsPage.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
 
 export default function BulletinsPage() {
   const [bulletins, setBulletins] = useState([]);

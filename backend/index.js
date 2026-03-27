@@ -121,6 +121,10 @@ app.post('/api/ivr/missed-call', async (req, res) => {
   res.send('<Response><Reject /></Response>');
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 GraamVaani Server (Firebase) running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 GraamVaani Server (Firebase) running on port ${PORT}`);
+  });
+}
+
+export default app;
