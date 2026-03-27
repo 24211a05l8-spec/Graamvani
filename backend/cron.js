@@ -13,26 +13,36 @@ export const initCronJobs = () => {
     console.log('⏰ Running daily bulletin auto-generation...');
     
     try {
-      const regions = ['Bihar', 'Uttar Pradesh', 'Rajasthan']; // Example regions
+      // 1. Define News Configurations (Categories & Languages)
+      const configs = [
+        { category: 'global', language: 'Hindi', label: 'Global Hot Topics' },
+        { category: 'telugu', language: 'Telugu', label: 'Telugu Regional News' },
+        { category: 'local', language: 'Hindi', label: 'Local District Updates' }
+      ];
       
-      for (const region of regions) {
-        const news = await fetchLatestNews(region);
-        const script = formatNewsForTTS(news);
-        const audio = await generateAudioBulletin(script);
+      for (const config of configs) {
+        // 2. Fetch Top 5 News
+        const news = await fetchLatestNews(config.category, config.language, 5);
         
+        // 3. Format Script
+        const script = formatNewsForTTS(news, config.language);
+        
+        // 4. Generate AI Voice
+        const audio = await generateAudioBulletin(script, config.language);
+        
+        // 5. Save to Firestore
         const data = {
-          title: `Daily Morning Bulletin - ${region}`,
+          title: `AI Auto: ${config.label}`,
           audioUrl: audio.url,
           textSeed: script,
-          language: 'Hindi',
-          region: region,
-          type: 'news',
+          language: config.language,
+          category: config.category,
           isActive: true,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         };
         
         await Bulletin.add(data);
-        console.log(`✅ Bulletin created for ${region}`);
+        console.log(`✅ Auto-Bulletin created: ${config.label}`);
       }
     } catch (err) {
       console.error('❌ Cron Job Error:', err);

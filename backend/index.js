@@ -149,15 +149,30 @@ app.post('/api/ivr/missed-call', async (req, res) => {
 
     if (user) {
       const language = user.language || 'Hindi (Standard)';
-      console.log(`✅ Registered user found (${user.name || user.panchayatName}). Language: ${language}`);
+    // 3. Determine Category based on the "To" number (Hotline)
+    const calledNumber = req.body.To;
+    let selectedCategory = 'local';
+    
+    // Example Hotline Mapping:
+    // +18001230001 -> Global/War (Hot Topics)
+    // +18001230002 -> Telugu Regional
+    if (calledNumber.includes('0001')) selectedCategory = 'global';
+    else if (calledNumber.includes('0002')) selectedCategory = 'telugu';
 
-      // 3. Fetch the latest bulletin for this language
-      const bulletinSnapshot = await Bulletin
-        .where('language', '==', language)
-        .where('isActive', '==', true)
-        .orderBy('createdAt', 'desc')
-        .limit(1)
-        .get();
+    console.log(`🎯 Routing call to category: ${selectedCategory} (via ${calledNumber})`);
+
+    // 4. Fetch the latest active bulletin for this category/language
+    let bulletinQuery = Bulletin.where('isActive', '==', true);
+    
+    if (selectedCategory !== 'local') {
+      bulletinQuery = bulletinQuery.where('category', '==', selectedCategory);
+    } else {
+      // For local news, respect the user's registered language
+      const userLang = user ? user.preferredLanguage : 'Hindi';
+      bulletinQuery = bulletinQuery.where('language', '==', userLang);
+    }
+
+    const bulletinSnapshot = await bulletinQuery.orderBy('createdAt', 'desc').limit(1).get();
 
       if (!bulletinSnapshot.empty) {
         const bulletin = bulletinSnapshot.docs[0].data();

@@ -1,6 +1,7 @@
 .analytics-page {
-  padding-top: 100px;
+  padding-top: 180px !important;
   padding-bottom: 60px;
+  min-height: 100vh;
 }
 
 .analytics-grid {
@@ -89,6 +90,7 @@
   .analytics-grid {
     grid-template-columns: 1fr 1fr;
   }
+
   .chart-card.wide {
     grid-column: span 2;
   }
@@ -98,6 +100,7 @@
   .analytics-grid {
     grid-template-columns: 1fr;
   }
+
   .chart-card.wide {
     grid-column: span 1;
   }
