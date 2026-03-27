@@ -103,22 +103,84 @@ app.get('/api/stats', async (req, res) => {
 // 3. IVR WEBHOOKS (Twilio)
 app.post('/api/ivr/missed-call', async (req, res) => {
   const from = req.body.From;
-  console.log(`🎙️ Missed call received from: ${from}`);
+  console.log(`🎙️ Incoming call from: ${from}`);
   
   try {
     // 1. Log the call
     await CallLog.add({
       phoneNumber: from,
-      status: 'missed',
+      status: 'incoming',
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
-  } catch (err) {
-    console.error('Error logging call:', err);
-  }
 
-  // 2. In a real Twilio setup, we'd trigger an Outbound Dial (Callback)
-  res.type('text/xml');
-  res.send('<Response><Reject /></Response>');
+    // 2. Lookup the caller (Check both Farmers and Panchayat Users)
+    let user = null;
+    
+    // Search in Farmers
+    const farmerSnapshot = await Farmer.where('phone', '==', from).limit(1).get();
+    if (!farmerSnapshot.empty) {
+      user = farmerSnapshot.docs[0].data();
+    } else {
+      // Search in Panchayat Users
+      const userSnapshot = await User.where('contactPhone', '==', from).limit(1).get();
+      if (!userSnapshot.empty) {
+        user = userSnapshot.docs[0].data();
+      }
+    }
+
+    res.type('text/xml');
+
+    if (user) {
+      const language = user.language || 'Hindi (Standard)';
+      console.log(`✅ Registered user found (${user.name || user.panchayatName}). Language: ${language}`);
+
+      // 3. Fetch the latest bulletin for this language
+      const bulletinSnapshot = await Bulletin
+        .where('language', '==', language)
+        .where('isActive', '==', true)
+        .orderBy('createdAt', 'desc')
+        .limit(1)
+        .get();
+
+      if (!bulletinSnapshot.empty) {
+        const bulletin = bulletinSnapshot.docs[0].data();
+        
+        // TwiML Response
+        let twiml = '<Response>';
+        twiml += `<Say voice="Polite">Welcome back to GraamVaani. Here is the latest news in ${language}.</Say>`;
+        
+        if (bulletin.audioUrl) {
+          twiml += `<Play>${bulletin.audioUrl}</Play>`;
+        } else {
+          twiml += `<Say>${bulletin.title}. ${bulletin.textSeed}</Say>`;
+        }
+        
+        twiml += '<Say>Thank you for listening to GraamVaani. Goodbye!</Say>';
+        twiml += '<Hangup /></Response>';
+        return res.send(twiml);
+      } else {
+        return res.send(`
+          <Response>
+            <Say>Welcome to GraamVaani. We don't have a new bulletin in ${language} yet. Please check back later.</Say>
+            <Hangup />
+          </Response>
+        `);
+      }
+    } else {
+      console.log(`❌ Unrecognized caller: ${from}`);
+      // 4. Prompt for registration
+      return res.send(`
+        <Response>
+          <Say>Welcome to GraamVaani. Your number is not registered. Please visit our website to register and receive hyper-local news updates in your language. Thank you.</Say>
+          <Hangup />
+        </Response>
+      `);
+    }
+  } catch (err) {
+    console.error('IVR Error:', err);
+    res.type('text/xml');
+    res.send('<Response><Say>An error occurred. Please try again later.</Say><Reject /></Response>');
+  }
 });
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {

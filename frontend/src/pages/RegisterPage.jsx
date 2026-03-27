@@ -18,7 +18,8 @@ export default function RegisterPage() {
     contactPhone: '',
     farmerCount: '',
     name: '', // for individual
-    phone: '' // for individual
+    phone: '', // for individual
+    language: 'Hindi (Standard)'
   });
 
   const [villages, setVillages] = useState([]);
@@ -278,6 +279,21 @@ export default function RegisterPage() {
                   value={formData.state}
                 />
               </div>
+            </div>
+            
+            <div className="form-group" style={{marginTop: '15px'}}>
+              <label className="form-label">Preferred News Language</label>
+              <select 
+                name="language" className="form-select" required 
+                onChange={handleChange} value={formData.language}
+              >
+                <option value="Hindi (Standard)">Hindi (Standard)</option>
+                <option value="Bhojpuri">Bhojpuri</option>
+                <option value="Maithili">Maithili</option>
+                <option value="Telugu">Telugu</option>
+                <option value="Kannada">Kannada</option>
+              </select>
+              <p className="input-tip">Bulletins will be played in this language during calls.</p>
             </div>
 
             {registrationType === 'panchayat' && (
