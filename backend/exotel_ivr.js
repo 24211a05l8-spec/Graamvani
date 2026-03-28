@@ -9,7 +9,7 @@ const router = express.Router();
  * @desc    Exotel IVR Webhook for voice routing
  * @access  Public (Exotel Passthru)
  */
-router.post('/', async (req, res) => {
+router.all('/', async (req, res) => {
   // 1. Extract the caller's phone number (Universal detection)
   console.log('--- 📞 NEW INCOMING IVR CALL ---');
   console.log('📦 Body:', JSON.stringify(req.body));
