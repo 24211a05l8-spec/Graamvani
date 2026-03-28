@@ -4,9 +4,9 @@ import Navbar from '../components/Navbar';
 import './LandingPage.css';
 
 const HOTLINES = [
-  { number: '1800-XXX-0001', label: 'State Government Schemes', lang: 'हिंदी / Regional', color: '#f97316' },
-  { number: '1800-XXX-0002', label: 'National News Today', lang: 'All Languages', color: '#10b981' },
-  { number: '1800-XXX-0003', label: 'Your District / Village News', lang: 'Auto-detected', color: '#8b5cf6' },
+  { number: '04041895241', label: 'Local Village News', lang: 'Auto-detected', color: '#f97316' },
+  { number: '04041895242', label: 'National News Today', lang: 'Hindi / English', color: '#10b981' },
+  { number: '04041895243', label: 'Global Hot Topics (War/Policy)', lang: 'Multi-language', color: '#8b5cf6' },
 ];
 
 const HOW_STEPS = [

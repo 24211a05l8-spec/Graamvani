@@ -27,36 +27,49 @@ router.post('/', async (req, res) => {
 
     res.set('Content-Type', 'text/xml');
 
-    // 3. Handle Registered User
-    if (userDoc.exists) {
-      const userData = userDoc.data();
-      const language = userData.language || 'Hindi'; // Fallback to Hindi
-      
-      console.log(`✅ Registered User: ${userData.name || 'Anonymous'} (Lang: ${language})`);
+    // 3. Determine Language & Category
+    const userLang = userDoc.exists ? (userDoc.data().preferredLanguage || 'Hindi') : 'Hindi';
+    const calledNumber = req.body.To || '';
+    let category = 'local';
+    
+    // Simple routing based on suffix (if you have multiple numbers)
+    if (calledNumber.endsWith('243')) category = 'global';
+    else if (calledNumber.endsWith('242')) category = 'national';
 
-      // 4. Return Language-Specific XML
-      if (language.toLowerCase() === 'telugu') {
-        // Replace with your actual hosted Telugu audio URL
-        return res.send(`
-          <Response>
-            <Play>https://your-storage.com/audio/telugu_news.mp3</Play>
-          </Response>
-        `.trim());
-      } else {
-        // Default to Hindi
-        return res.send(`
-          <Response>
-            <Play>https://your-storage.com/audio/hindi_news.mp3</Play>
-          </Response>
-        `.trim());
-      }
-    } 
+    console.log(`🎯 Routing to ${category} in ${userLang}`);
 
-    // 5. Handle Unregistered User
-    console.log(`⚠️ Unregistered caller: ${from}`);
+    // 4. Fetch the latest active bulletin
+    const bulletinSnapshot = await db.collection('bulletins')
+      .where('isActive', '==', true)
+      .where('language', '==', userLang)
+      .where('category', '==', category)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (!bulletinSnapshot.empty) {
+      const bulletin = bulletinSnapshot.docs[0].data();
+      return res.send(`
+        <Response>
+          <Say>Welcome to GraamVaani. Playing your ${category} update in ${userLang}.</Say>
+          <Play>${bulletin.audioUrl}</Play>
+        </Response>
+      `.trim());
+    }
+
+    // 5. Registration Prompt for non-users or no bulletin
+    if (!userDoc.exists) {
+      console.log(`⚠️ Unregistered caller: ${from}`);
+      return res.send(`
+        <Response>
+          <Say>Welcome to GraamVaani. Your number is not registered. Please visit our website to register. Thank you.</Say>
+        </Response>
+      `.trim());
+    }
+
     return res.send(`
       <Response>
-        <Say>You are not registered. Please register on GraamVaani website to continue.</Say>
+        <Say>Welcome to GraamVaani. We don't have a new bulletin for you yet. Please check back later.</Say>
       </Response>
     `.trim());
 
