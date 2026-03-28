@@ -1,4 +1,5 @@
 import express from 'express';
+import admin from 'firebase-admin';
 import { db } from './firebase.js';
 
 const router = express.Router();
@@ -9,43 +10,74 @@ const router = express.Router();
  * @access  Public (Exotel Passthru)
  */
 router.post('/', async (req, res) => {
-  // 1. Extract the caller's phone number from Exotel request
-  console.log('📬 NEW IVR REQUEST RECEIVED');
-  console.log('📦 Request Body:', JSON.stringify(req.body));
-  console.log('📦 Request Query:', JSON.stringify(req.query));
+  // 1. Extract the caller's phone number (Universal detection)
+  console.log('--- 📞 NEW INCOMING IVR CALL ---');
+  console.log('📦 Body:', JSON.stringify(req.body));
+  console.log('📦 Query:', JSON.stringify(req.query));
 
-  let rawFrom = req.body.From || req.query.From || req.body.from || req.query.from || req.body.Caller || req.query.Caller;
+  const rawFrom = req.body.From || req.query.From || 
+                  req.body.from || req.query.from || 
+                  req.body.Caller || req.query.Caller || 
+                  req.body.phoneNumber || req.query.phoneNumber;
 
   if (!rawFrom) {
-    console.warn('⚠️ Exotel Error: No phone parameter found in body or query!');
-    return res.status(400).send('<Response><Say>Error: Identification failed.</Say></Response>');
+    console.warn('❌ CRITICAL: No phone number found in Exotel request!');
+    return res.status(400).send('<Response><Say>Identification failed. Please try again.</Say></Response>');
   }
 
-  // 1.1 Normalize to last 10 digits as per your suggestion
-  // This removes spaces, +91, 0, etc. and takes only the actual number
+  // 1.1 Strict 10-digit normalization
   const from = rawFrom.replace(/\D/g, '').slice(-10);
-
-  console.log(`🔎 LOOKUP: Raw[${rawFrom}] -> Normalized[${from}]`);
+  console.log(`🔎 NORMALIZED: ${rawFrom} -> ${from}`);
 
   try {
-    // 2. Lookup the caller (Check both Farmers and Panchayat Users)
+    // 2. Ensuring DB reference is valid 
+    // In serverless, lazy initialization is safer
+    let activeDb = db;
+    if (!activeDb) {
+      console.log('ℹ️ db reference was null, getting fresh instance from admin...');
+      activeDb = admin.apps.length ? admin.firestore() : null;
+    }
+
+    if (!activeDb) {
+      throw new Error('Firestore DB unavailable');
+    }
+
     let user = null;
+    let collectionName = '';
+
+    // 🚀 STEP 1: Search in Farmers for BOTH 'phone' and 'contactPhone'
+    console.log(`📡 Searching Farmers collection for "${from}"...`);
+    const farmerChecks = [
+      activeDb.collection('farmers').where('phone', '==', from).limit(1).get(),
+      activeDb.collection('farmers').where('contactPhone', '==', from).limit(1).get()
+    ];
     
-    // Search in Farmers collection (Field: 'phone')
-    console.log(`📡 Querying Farmers collection for phone == "${from}"...`);
-    let farmerSnapshot = await db.collection('farmers').where('phone', '==', from).limit(1).get();
+    const [farmerByPhone, farmerByContact] = await Promise.all(farmerChecks);
     
-    if (!farmerSnapshot.empty) {
-      user = farmerSnapshot.docs[0].data();
-      console.log('✅ Found in Farmers');
-    } else {
-      // Search in Users collection (Field: 'contactPhone')
-      console.log(`📡 Querying Users collection for contactPhone == "${from}"...`);
-      let userSnapshot = await db.collection('users').where('contactPhone', '==', from).limit(1).get();
+    if (!farmerByPhone.empty) {
+      user = farmerByPhone.docs[0].data();
+      collectionName = 'farmers (phone)';
+    } else if (!farmerByContact.empty) {
+      user = farmerByContact.docs[0].data();
+      collectionName = 'farmers (contactPhone)';
+    }
+
+    // 🚀 STEP 2: Search in Users if not found in Farmers
+    if (!user) {
+      console.log(`📡 Searching Users collection for "${from}"...`);
+      const userChecks = [
+        activeDb.collection('users').where('phone', '==', from).limit(1).get(),
+        activeDb.collection('users').where('contactPhone', '==', from).limit(1).get()
+      ];
       
-      if (!userSnapshot.empty) {
-        user = userSnapshot.docs[0].data();
-        console.log('✅ Found in Users');
+      const [userByPhone, userByContact] = await Promise.all(userChecks);
+      
+      if (!userByPhone.empty) {
+        user = userByPhone.docs[0].data();
+        collectionName = 'users (phone)';
+      } else if (!userByContact.empty) {
+        user = userByContact.docs[0].data();
+        collectionName = 'users (contactPhone)';
       }
     }
 
@@ -53,13 +85,16 @@ router.post('/', async (req, res) => {
 
     // 3. Handle Unregistered User
     if (!user) {
-      console.log(`❌ BLOCK: Number ${from} not found in database.`);
+      console.log(`❌ BLOCK: ${from} not found in any collection.`);
       return res.send(`
         <Response>
           <Say>Welcome to GraamVaani. Your number ${from} is not registered. Please visit our website to register. Thank you.</Say>
+          <Hangup />
         </Response>
       `.trim());
     }
+
+    console.log(`✅ MATCH: Found in ${collectionName}`);
 
     // 4. Handle Registered User
     // From photo: the field name is "language"
