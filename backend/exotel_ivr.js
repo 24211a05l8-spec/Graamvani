@@ -162,6 +162,8 @@ router.get('/test', async (req, res) => {
     let debugInfo = {
       status: 'ok',
       database: 'connected',
+      project_id: admin.apps[0].options.projectId || 'unknown',
+      server_time: new Date().toISOString(),
       searching_for: searchPhone,
       variants_tried: []
     };
