@@ -74,9 +74,11 @@ router.post('/', async (req, res) => {
 
     if (!bulletinSnapshot.empty) {
       const bulletin = bulletinSnapshot.docs[0].data();
+      const userName = user.name || user.panchayatName || 'Farmer';
+      
       return res.send(`
         <Response>
-          <Say voice="Polite">Welcome back to GraamVaani. Playing your ${category} news in ${userLang}.</Say>
+          <Say voice="Polite">Namaste ${userName}, welcome back to GraamVaani. Playing your ${category} news in ${userLang}.</Say>
           <Play>${bulletin.audioUrl}</Play>
         </Response>
       `.trim());
