@@ -46,38 +46,41 @@ router.post('/', async (req, res) => {
     let collectionName = '';
 
     // 🚀 STEP 1: Search in Farmers for BOTH 'phone' and 'contactPhone'
+    // We try THREE ways: String match, Number match, and Trimmed match
     console.log(`📡 Searching Farmers collection for "${from}"...`);
-    const farmerChecks = [
-      activeDb.collection('farmers').where('phone', '==', from).limit(1).get(),
-      activeDb.collection('farmers').where('contactPhone', '==', from).limit(1).get()
+    
+    // Convert to number just in case Firestore stored it as a number
+    const fromNum = parseInt(from, 10);
+    
+    const farmerQueries = [
+      activeDb.collection('farmers').where('phone', '==', from).get(),
+      activeDb.collection('farmers').where('phone', '==', fromNum).get(),
+      activeDb.collection('farmers').where('contactPhone', '==', from).get(),
+      activeDb.collection('farmers').where('contactPhone', '==', fromNum).get()
     ];
     
-    const [farmerByPhone, farmerByContact] = await Promise.all(farmerChecks);
+    const queryResults = await Promise.all(farmerQueries);
+    const farmerDoc = queryResults.find(snap => !snap.empty)?.docs[0];
     
-    if (!farmerByPhone.empty) {
-      user = farmerByPhone.docs[0].data();
-      collectionName = 'farmers (phone)';
-    } else if (!farmerByContact.empty) {
-      user = farmerByContact.docs[0].data();
-      collectionName = 'farmers (contactPhone)';
-    }
-
-    // 🚀 STEP 2: Search in Users if not found in Farmers
-    if (!user) {
+    if (farmerDoc) {
+      user = farmerDoc.data();
+      collectionName = 'farmers';
+    } else {
+      // 🚀 STEP 2: Search in Users if not found in Farmers
       console.log(`📡 Searching Users collection for "${from}"...`);
-      const userChecks = [
-        activeDb.collection('users').where('phone', '==', from).limit(1).get(),
-        activeDb.collection('users').where('contactPhone', '==', from).limit(1).get()
+      const userQueries = [
+        activeDb.collection('users').where('phone', '==', from).get(),
+        activeDb.collection('users').where('phone', '==', fromNum).get(),
+        activeDb.collection('users').where('contactPhone', '==', from).get(),
+        activeDb.collection('users').where('contactPhone', '==', fromNum).get()
       ];
       
-      const [userByPhone, userByContact] = await Promise.all(userChecks);
+      const userQueryResults = await Promise.all(userQueries);
+      const userDocMatch = userQueryResults.find(snap => !snap.empty)?.docs[0];
       
-      if (!userByPhone.empty) {
-        user = userByPhone.docs[0].data();
-        collectionName = 'users (phone)';
-      } else if (!userByContact.empty) {
-        user = userByContact.docs[0].data();
-        collectionName = 'users (contactPhone)';
+      if (userDocMatch) {
+        user = userDocMatch.data();
+        collectionName = 'users';
       }
     }
 
@@ -85,16 +88,16 @@ router.post('/', async (req, res) => {
 
     // 3. Handle Unregistered User
     if (!user) {
-      console.log(`❌ BLOCK: ${from} not found in any collection.`);
+      console.error(`❌ BLOCK: ${from} (as string or number) not found in DB.`);
       return res.send(`
         <Response>
-          <Say>Welcome to GraamVaani. Your number ${from} is not registered. Please visit our website to register. Thank you.</Say>
+          <Say>Welcome to GraamVaani. Your number ${from} is not recognized. Please register online. Thank you.</Say>
           <Hangup />
         </Response>
       `.trim());
     }
 
-    console.log(`✅ MATCH: Found in ${collectionName}`);
+    console.log(`✅ MATCH: Found ${user.name || 'User'} in ${collectionName}`);
 
     // 4. Handle Registered User
     // From photo: the field name is "language"
