@@ -10,57 +10,53 @@ const router = express.Router();
  */
 router.post('/', async (req, res) => {
   // 1. Extract the caller's phone number from Exotel request
-  // Exotel sends 'From' in the POST body or query params
-  let rawFrom = req.body.From || req.query.From || req.body.from || req.query.from;
+  console.log('📬 NEW IVR REQUEST RECEIVED');
+  console.log('📦 Request Body:', JSON.stringify(req.body));
+  console.log('📦 Request Query:', JSON.stringify(req.query));
+
+  let rawFrom = req.body.From || req.query.From || req.body.from || req.query.from || req.body.Caller || req.query.Caller;
 
   if (!rawFrom) {
-    console.warn('⚠️ Exotel Warning: No "From" parameter found. Request Body:', JSON.stringify(req.body));
-    return res.status(400).send('<Response><Say>Error: No phone number received.</Say></Response>');
+    console.warn('⚠️ Exotel Error: No phone parameter found in body or query!');
+    return res.status(400).send('<Response><Say>Error: Identification failed.</Say></Response>');
   }
 
-  // 1.1 Normalize phone number (Remove +91, 0, or non-digits)
-  const from = rawFrom.replace(/\D/g, '').replace(/^91/, '').replace(/^0/, '');
+  // 1.1 Normalize to last 10 digits as per your suggestion
+  // This removes spaces, +91, 0, etc. and takes only the actual number
+  const from = rawFrom.replace(/\D/g, '').slice(-10);
 
-  console.log(`🎙️ Exotel Call from raw: ${rawFrom} (Normalized for DB Lookup: ${from})`);
+  console.log(`🔎 LOOKUP: Raw[${rawFrom}] -> Normalized[${from}]`);
 
   try {
     // 2. Lookup the caller (Check both Farmers and Panchayat Users)
     let user = null;
     
-    // Search in Farmers
+    // Search in Farmers collection (Field: 'phone')
+    console.log(`📡 Querying Farmers collection for phone == "${from}"...`);
     let farmerSnapshot = await db.collection('farmers').where('phone', '==', from).limit(1).get();
     
-    // If no direct match, try matching with the last 10 digits (fallback for existing data)
-    if (farmerSnapshot.empty && from.length >= 10) {
-      const tenDigits = from.slice(-10);
-      farmerSnapshot = await db.collection('farmers').where('phone', '==', tenDigits).limit(1).get();
-    }
-
     if (!farmerSnapshot.empty) {
       user = farmerSnapshot.docs[0].data();
+      console.log('✅ Found in Farmers');
     } else {
-      // Search in Panchayat Users
+      // Search in Users collection (Field: 'contactPhone')
+      console.log(`📡 Querying Users collection for contactPhone == "${from}"...`);
       let userSnapshot = await db.collection('users').where('contactPhone', '==', from).limit(1).get();
       
-      // Fallback for Users
-      if (userSnapshot.empty && from.length >= 10) {
-        const tenDigits = from.slice(-10);
-        userSnapshot = await db.collection('users').where('contactPhone', '==', tenDigits).limit(1).get();
-      }
-
       if (!userSnapshot.empty) {
         user = userSnapshot.docs[0].data();
+        console.log('✅ Found in Users');
       }
     }
 
     res.set('Content-Type', 'text/xml');
 
-    // 3. Handle Unregistered User (STRICT)
+    // 3. Handle Unregistered User
     if (!user) {
-      console.log(`⚠️ Unregistered caller blocked: ${from}`);
+      console.log(`❌ BLOCK: Number ${from} not found in database.`);
       return res.send(`
         <Response>
-          <Say>Welcome to GraamVaani. Your number is not registered. Please visit our website to register and receive hyper-local news updates in your language. Thank you.</Say>
+          <Say>Welcome to GraamVaani. Your number ${from} is not registered. Please visit our website to register. Thank you.</Say>
         </Response>
       `.trim());
     }
