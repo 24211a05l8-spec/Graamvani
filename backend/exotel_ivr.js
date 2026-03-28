@@ -21,14 +21,35 @@ router.post('/', async (req, res) => {
   console.log(`🎙️ Exotel Call from: ${from}`);
 
   try {
-    // 2. Check if user exists in Firestore
-    // Note: We use the phone number directly as the document ID for performance
-    const userDoc = await db.collection('users').doc(from).get();
+    // 2. Lookup the caller (Check both Farmers and Panchayat Users)
+    let user = null;
+    
+    // Search in Farmers
+    const farmerSnapshot = await db.collection('farmers').where('phone', '==', from).limit(1).get();
+    if (!farmerSnapshot.empty) {
+      user = farmerSnapshot.docs[0].data();
+    } else {
+      // Search in Panchayat Users
+      const userSnapshot = await db.collection('users').where('contactPhone', '==', from).limit(1).get();
+      if (!userSnapshot.empty) {
+        user = userSnapshot.docs[0].data();
+      }
+    }
 
     res.set('Content-Type', 'text/xml');
 
-    // 3. Determine Language & Category
-    const userLang = userDoc.exists ? (userDoc.data().preferredLanguage || 'Hindi') : 'Hindi';
+    // 3. Handle Unregistered User (STRICT)
+    if (!user) {
+      console.log(`⚠️ Unregistered caller blocked: ${from}`);
+      return res.send(`
+        <Response>
+          <Say>Welcome to GraamVaani. Your number is not registered. Please visit our website to register and receive hyper-local news updates in your language. Thank you.</Say>
+        </Response>
+      `.trim());
+    }
+
+    // 4. Handle Registered User
+    const userLang = user.preferredLanguage || 'Hindi';
     const calledNumber = req.body.To || '';
     let category = 'local';
     
@@ -36,9 +57,9 @@ router.post('/', async (req, res) => {
     if (calledNumber.endsWith('243')) category = 'global';
     else if (calledNumber.endsWith('242')) category = 'national';
 
-    console.log(`🎯 Routing to ${category} in ${userLang}`);
+    console.log(`✅ Registered user: ${from} (Routing to ${category} in ${userLang})`);
 
-    // 4. Fetch the latest active bulletin
+    // 5. Fetch the latest active bulletin
     const bulletinSnapshot = await db.collection('bulletins')
       .where('isActive', '==', true)
       .where('language', '==', userLang)
@@ -51,25 +72,15 @@ router.post('/', async (req, res) => {
       const bulletin = bulletinSnapshot.docs[0].data();
       return res.send(`
         <Response>
-          <Say>Welcome to GraamVaani. Playing your ${category} update in ${userLang}.</Say>
+          <Say voice="Polite">Welcome back to GraamVaani. Playing your ${category} news in ${userLang}.</Say>
           <Play>${bulletin.audioUrl}</Play>
-        </Response>
-      `.trim());
-    }
-
-    // 5. Registration Prompt for non-users or no bulletin
-    if (!userDoc.exists) {
-      console.log(`⚠️ Unregistered caller: ${from}`);
-      return res.send(`
-        <Response>
-          <Say>Welcome to GraamVaani. Your number is not registered. Please visit our website to register. Thank you.</Say>
         </Response>
       `.trim());
     }
 
     return res.send(`
       <Response>
-        <Say>Welcome to GraamVaani. We don't have a new bulletin for you yet. Please check back later.</Say>
+        <Say>Welcome back. We don't have a new bulletin for you yet in ${userLang}. Please check back later.</Say>
       </Response>
     `.trim());
 
