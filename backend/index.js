@@ -77,6 +77,14 @@ app.post('/api/register', async (req, res) => {
   try {
     const { registrationType, ...formData } = req.body;
     
+    // 1. Normalize phone numbers before saving
+    if (formData.phone) {
+      formData.phone = formData.phone.replace(/\D/g, '').replace(/^91/, '').replace(/^0/, '');
+    }
+    if (formData.contactPhone) {
+      formData.contactPhone = formData.contactPhone.replace(/\D/g, '').replace(/^91/, '').replace(/^0/, '');
+    }
+
     const data = {
       ...formData,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -84,13 +92,10 @@ app.post('/api/register', async (req, res) => {
     };
 
     if (registrationType === 'individual') {
-      // Register as a Farmer
       data.role = 'farmer';
-      // Normalize individual fields if necessary (already handled by formData)
       const docRef = await Farmer.add(data);
       res.status(201).json({ message: 'Individual registration successful', id: docRef.id, user: data });
     } else {
-      // Register as a Panchayat (User)
       data.role = 'panchayat';
       const docRef = await User.add(data);
       res.status(201).json({ message: 'Panchayat registration successful', id: docRef.id, user: data });

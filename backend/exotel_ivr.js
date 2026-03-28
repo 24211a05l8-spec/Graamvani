@@ -10,31 +10,44 @@ const router = express.Router();
  */
 router.post('/', async (req, res) => {
   // 1. Extract the caller's phone number from Exotel request
-  // Exotel sends 'From' in the POST body (form-encoded) or query params
-  let rawFrom = req.body.From || req.query.From;
+  // Exotel sends 'From' in the POST body or query params
+  let rawFrom = req.body.From || req.query.From || req.body.from || req.query.from;
 
   if (!rawFrom) {
-    console.error('❌ Exotel Error: No From phone number received');
+    console.warn('⚠️ Exotel Warning: No "From" parameter found. Request Body:', JSON.stringify(req.body));
     return res.status(400).send('<Response><Say>Error: No phone number received.</Say></Response>');
   }
 
-  // 1.1 Normalize phone number (Strip +91, 0, or non-digits)
-  // We want to match the 10-digit format usually stored in the DB
-  const from = rawFrom.replace(/\D/g, '').slice(-10);
+  // 1.1 Normalize phone number (Remove +91, 0, or non-digits)
+  const from = rawFrom.replace(/\D/g, '').replace(/^91/, '').replace(/^0/, '');
 
-  console.log(`🎙️ Exotel Call from: ${rawFrom} (Normalized: ${from})`);
+  console.log(`🎙️ Exotel Call from raw: ${rawFrom} (Normalized for DB Lookup: ${from})`);
 
   try {
     // 2. Lookup the caller (Check both Farmers and Panchayat Users)
     let user = null;
     
     // Search in Farmers
-    const farmerSnapshot = await db.collection('farmers').where('phone', '==', from).limit(1).get();
+    let farmerSnapshot = await db.collection('farmers').where('phone', '==', from).limit(1).get();
+    
+    // If no direct match, try matching with the last 10 digits (fallback for existing data)
+    if (farmerSnapshot.empty && from.length >= 10) {
+      const tenDigits = from.slice(-10);
+      farmerSnapshot = await db.collection('farmers').where('phone', '==', tenDigits).limit(1).get();
+    }
+
     if (!farmerSnapshot.empty) {
       user = farmerSnapshot.docs[0].data();
     } else {
       // Search in Panchayat Users
-      const userSnapshot = await db.collection('users').where('contactPhone', '==', from).limit(1).get();
+      let userSnapshot = await db.collection('users').where('contactPhone', '==', from).limit(1).get();
+      
+      // Fallback for Users
+      if (userSnapshot.empty && from.length >= 10) {
+        const tenDigits = from.slice(-10);
+        userSnapshot = await db.collection('users').where('contactPhone', '==', tenDigits).limit(1).get();
+      }
+
       if (!userSnapshot.empty) {
         user = userSnapshot.docs[0].data();
       }
