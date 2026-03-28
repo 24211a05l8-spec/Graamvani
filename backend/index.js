@@ -19,6 +19,7 @@ initCronJobs();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // Required for Exotel/Webhook form data
 app.use(morgan('dev'));
 
 // Note: Firebase is initialized in firebase.js and imported via models/index.js
@@ -121,103 +122,7 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// 3. IVR WEBHOOKS (Twilio)
-app.post('/api/ivr/missed-call', async (req, res) => {
-  const from = req.body.From;
-  console.log(`🎙️ Incoming call from: ${from}`);
-  
-  try {
-    // 1. Log the call
-    await CallLog.add({
-      phoneNumber: from,
-      status: 'incoming',
-      timestamp: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // 2. Lookup the caller (Check both Farmers and Panchayat Users)
-    let user = null;
-    
-    // Search in Farmers
-    const farmerSnapshot = await Farmer.where('phone', '==', from).limit(1).get();
-    if (!farmerSnapshot.empty) {
-      user = farmerSnapshot.docs[0].data();
-    } else {
-      // Search in Panchayat Users
-      const userSnapshot = await User.where('contactPhone', '==', from).limit(1).get();
-      if (!userSnapshot.empty) {
-        user = userSnapshot.docs[0].data();
-      }
-    }
-
-    res.type('text/xml');
-
-    if (user) {
-      const language = user.language || 'Hindi (Standard)';
-    // 3. Determine Category based on the "To" number (Hotline)
-    const calledNumber = req.body.To;
-    let selectedCategory = 'local';
-    
-    // Example Hotline Mapping:
-    // +18001230001 -> Global/War (Hot Topics)
-    // +18001230002 -> Telugu Regional
-    if (calledNumber.includes('0001')) selectedCategory = 'global';
-    else if (calledNumber.includes('0002')) selectedCategory = 'telugu';
-
-    console.log(`🎯 Routing call to category: ${selectedCategory} (via ${calledNumber})`);
-
-    // 4. Fetch the latest active bulletin for this category/language
-    let bulletinQuery = Bulletin.where('isActive', '==', true);
-    
-    if (selectedCategory !== 'local') {
-      bulletinQuery = bulletinQuery.where('category', '==', selectedCategory);
-    } else {
-      // For local news, respect the user's registered language
-      const userLang = user ? user.preferredLanguage : 'Hindi';
-      bulletinQuery = bulletinQuery.where('language', '==', userLang);
-    }
-
-    const bulletinSnapshot = await bulletinQuery.orderBy('createdAt', 'desc').limit(1).get();
-
-      if (!bulletinSnapshot.empty) {
-        const bulletin = bulletinSnapshot.docs[0].data();
-        
-        // TwiML Response
-        let twiml = '<Response>';
-        twiml += `<Say voice="Polite">Welcome back to GraamVaani. Here is the latest news in ${language}.</Say>`;
-        
-        if (bulletin.audioUrl) {
-          twiml += `<Play>${bulletin.audioUrl}</Play>`;
-        } else {
-          twiml += `<Say>${bulletin.title}. ${bulletin.textSeed}</Say>`;
-        }
-        
-        twiml += '<Say>Thank you for listening to GraamVaani. Goodbye!</Say>';
-        twiml += '<Hangup /></Response>';
-        return res.send(twiml);
-      } else {
-        return res.send(`
-          <Response>
-            <Say>Welcome to GraamVaani. We don't have a new bulletin in ${language} yet. Please check back later.</Say>
-            <Hangup />
-          </Response>
-        `);
-      }
-    } else {
-      console.log(`❌ Unrecognized caller: ${from}`);
-      // 4. Prompt for registration
-      return res.send(`
-        <Response>
-          <Say>Welcome to GraamVaani. Your number is not registered. Please visit our website to register and receive hyper-local news updates in your language. Thank you.</Say>
-          <Hangup />
-        </Response>
-      `);
-    }
-  } catch (err) {
-    console.error('IVR Error:', err);
-    res.type('text/xml');
-    res.send('<Response><Say>An error occurred. Please try again later.</Say><Reject /></Response>');
-  }
-});
+// Exotel IVR is now handled by exotel_ivr.js via app.use('/api/ivr', exotelRouter)
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, () => {

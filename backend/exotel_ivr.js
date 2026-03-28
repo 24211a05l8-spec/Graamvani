@@ -10,15 +10,19 @@ const router = express.Router();
  */
 router.post('/', async (req, res) => {
   // 1. Extract the caller's phone number from Exotel request
-  // Exotel sends 'From' in the POST body or query params
-  const from = req.body.From || req.query.From;
+  // Exotel sends 'From' in the POST body (form-encoded) or query params
+  let rawFrom = req.body.From || req.query.From;
 
-  if (!from) {
+  if (!rawFrom) {
     console.error('❌ Exotel Error: No From phone number received');
     return res.status(400).send('<Response><Say>Error: No phone number received.</Say></Response>');
   }
 
-  console.log(`🎙️ Exotel Call from: ${from}`);
+  // 1.1 Normalize phone number (Strip +91, 0, or non-digits)
+  // We want to match the 10-digit format usually stored in the DB
+  const from = rawFrom.replace(/\D/g, '').slice(-10);
+
+  console.log(`🎙️ Exotel Call from: ${rawFrom} (Normalized: ${from})`);
 
   try {
     // 2. Lookup the caller (Check both Farmers and Panchayat Users)
