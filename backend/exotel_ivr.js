@@ -66,7 +66,9 @@ router.post('/', async (req, res) => {
     }
 
     // 4. Handle Registered User
-    const userLang = user.preferredLanguage || 'Hindi';
+    // From photo: the field name is "language"
+    const userLang = user.language || user.preferredLanguage || 'Hindi';
+    const userName = user.name || user.panchayatName || 'Farmer';
     const calledNumber = req.body.To || '';
     let category = 'local';
     
@@ -74,7 +76,7 @@ router.post('/', async (req, res) => {
     if (calledNumber.endsWith('243')) category = 'global';
     else if (calledNumber.endsWith('242')) category = 'national';
 
-    console.log(`✅ Registered user: ${from} (Routing to ${category} in ${userLang})`);
+    console.log(`✅ Registered user: ${userName} (Routing to ${category} in ${userLang})`);
 
     // 5. Fetch the latest active bulletin
     const bulletinSnapshot = await db.collection('bulletins')
