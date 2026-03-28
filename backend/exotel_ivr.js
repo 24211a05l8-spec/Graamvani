@@ -154,24 +154,56 @@ router.all('/', async (req, res) => {
 
 /**
  * @route   GET /api/ivr/test
- * @desc    Debug endpoint to verify Firebase connectivity
+ * @desc    Deep debug endpoint to verify search logic
  */
 router.get('/test', async (req, res) => {
   try {
-    const snapshot = await db.collection('farmers').limit(1).get();
-    if (snapshot.empty) {
-      return res.json({ status: 'ok', database: 'connected', farmers: 0, message: 'No farmers found in collection' });
+    const searchPhone = req.query.phone ? req.query.phone.replace(/\D/g, '').slice(-10) : null;
+    let debugInfo = {
+      status: 'ok',
+      database: 'connected',
+      searching_for: searchPhone,
+      variants_tried: []
+    };
+
+    if (searchPhone) {
+      const variants = [searchPhone, parseInt(searchPhone, 10)];
+      debugInfo.variants_tried = variants;
+      
+      const results = await Promise.all([
+        db.collection('farmers').where('phone', '==', variants[0]).get(),
+        db.collection('farmers').where('phone', '==', variants[1]).get(),
+        db.collection('users').where('contactPhone', '==', variants[0]).get(),
+        db.collection('users').where('contactPhone', '==', variants[1]).get()
+      ]);
+
+      debugInfo.found = {
+        farmers_string: !results[0].empty,
+        farmers_number: !results[1].empty,
+        users_string: !results[2].empty,
+        users_number: !results[3].empty
+      };
+
+      if (!results[0].empty || !results[1].empty || !results[2].empty || !results[3].empty) {
+        const doc = (results[0].docs[0] || results[1].docs[0] || results[2].docs[0] || results[3].docs[0]).data();
+        debugInfo.matched_user = {
+          name: doc.name || doc.panchayatName,
+          actual_db_phone: doc.phone || doc.contactPhone,
+          db_phone_type: typeof (doc.phone || doc.contactPhone)
+        };
+      }
+    } else {
+      const snapshot = await db.collection('farmers').limit(5).get();
+      debugInfo.collection_samples = snapshot.docs.map(d => ({
+        id: d.id,
+        phone: d.data().phone,
+        type: typeof d.data().phone
+      }));
     }
-    const sample = snapshot.docs[0].data();
-    return res.json({ 
-      status: 'ok', 
-      database: 'connected', 
-      sample_phone: sample.phone,
-      sample_name: sample.name,
-      total_found: snapshot.size 
-    });
+
+    return res.json(debugInfo);
   } catch (err) {
-    return res.status(500).json({ status: 'error', message: err.message });
+    return res.status(500).json({ status: 'error', error: err.message, stack: err.stack });
   }
 });
 
