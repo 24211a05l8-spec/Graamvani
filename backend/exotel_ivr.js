@@ -152,4 +152,27 @@ router.post('/', async (req, res) => {
   }
 });
 
+/**
+ * @route   GET /api/ivr/test
+ * @desc    Debug endpoint to verify Firebase connectivity
+ */
+router.get('/test', async (req, res) => {
+  try {
+    const snapshot = await db.collection('farmers').limit(1).get();
+    if (snapshot.empty) {
+      return res.json({ status: 'ok', database: 'connected', farmers: 0, message: 'No farmers found in collection' });
+    }
+    const sample = snapshot.docs[0].data();
+    return res.json({ 
+      status: 'ok', 
+      database: 'connected', 
+      sample_phone: sample.phone,
+      sample_name: sample.name,
+      total_found: snapshot.size 
+    });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 export default router;
