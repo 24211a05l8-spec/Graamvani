@@ -1,14 +1,14 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import admin from 'firebase-admin';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import morgan from 'morgan';
 import { User, Bulletin, CallLog, Farmer, Notification } from './models/index.js';
 import { initCronJobs } from './cron.js';
 import { generateAudioBulletin } from './services/ttsService.js';
 import exotelRouter from './exotel_ivr.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

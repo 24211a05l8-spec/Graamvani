@@ -16,12 +16,14 @@ const PROMPTS = {
     loadingError: "क्षमा करें, हम तकनीकी खराबी का सामना कर रहे हैं। कृपया बाद में प्रयास करें।"
   },
   English: {
-    welcomeUnregistered: (from) => `Welcome to GraamVaani. Your number ${from} is not recognized. Please register online to access our services. Thank you.`,
+    welcomeUnregistered: (from) => `Welcome to GraamVaani. Your number ${from.split('').join(' ')} is not recognized. Please register online.`,
     welcomeRegistered: (name, category, lang) => `Namaste ${name}, welcome back to GraamVaani. Playing your ${category} news in ${lang}.`,
     noBulletin: (lang) => `Welcome back. We don't have a new bulletin for you yet in ${lang}. Please check back later.`,
     loadingError: "Sorry, we are experiencing technical difficulties. Please call again later."
   }
 };
+
+const VERSION = "1.1.2"; // Used to verify if the user is hitting the latest deployment
 
 /**
  * @route   POST /ivr
@@ -122,7 +124,10 @@ router.all('/', async (req, res) => {
       activeDb.collection('farmers').where('phone', '==', from).get(),
       activeDb.collection('farmers').where('phone', '==', fromNum).get(),
       activeDb.collection('users').where('phone', '==', from).get(),
-      activeDb.collection('users').where('phone', '==', fromNum).get()
+      activeDb.collection('users').where('phone', '==', fromNum).get(),
+      // 🆕 Added support for "contactPhone" (Panchayat registrations)
+      activeDb.collection('users').where('contactPhone', '==', from).get(),
+      activeDb.collection('users').where('contactPhone', '==', fromNum).get()
     ];
     
     const results = await Promise.all(queries);
@@ -131,7 +136,8 @@ router.all('/', async (req, res) => {
     if (userDocMatch) {
       user = userDocMatch.data();
       collectionName = userDocMatch.ref.parent.id;
-      console.log(`✅ Identified by Phone: ${from} -> ${user.name || user.panchayatName}`);
+      const matchField = user.phone === from || user.phone === fromNum ? 'phone' : 'contactPhone';
+      console.log(`✅ Identified by ${matchField} in ${collectionName}: ${from} -> ${user.name || user.panchayatName}`);
     }
 
     // 🚀 STEP 1.1: IDENTIFICATION FALLBACK (If phone lookup fails, try Custom Key)
@@ -177,14 +183,13 @@ router.all('/', async (req, res) => {
     const isXmlRequested = getParam('xml') === 'true' || getParam('format') === 'xml';
 
     if (!user) {
-      console.error(`❌ DENIED: ${from} not found in DB and no custom key match.`);
+      console.error(`❌ DENIED: ${from} not found in DB [VER: ${VERSION}]`);
       
-      // If they want XML, return the hangup response. 
-      // Otherwise, return 302 (the standard Exotel Passthru "Failure" code).
       if (isXmlRequested) {
         res.set('Content-Type', 'text/xml');
         return res.send(`
           <Response>
+            <Say voice="Polite">${prompts.welcomeUnregistered(from)}</Say>
             <Hangup />
           </Response>
         `.trim());
