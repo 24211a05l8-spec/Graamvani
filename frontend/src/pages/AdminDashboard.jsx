@@ -1,5 +1,10 @@
-import { TrendingUp, Users, PhoneCall, Radio, MessageSquare, ChevronRight, Play, FileText, Download, BarChart3 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { TrendingUp, Users, PhoneCall, Radio, MessageSquare, ChevronRight, Play, FileText, Download, BarChart3, Bell } from 'lucide-react';
 import './AdminDashboard.css';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
 
 const STAT_CARDS = [
   { label: 'Total Registered Farmers', value: '12,482', change: '+12% this month', icon: <Users size={20} />, color: 'var(--primary)' },
@@ -22,6 +27,41 @@ const QUICK_ACTIONS = [
 ];
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    totalFarmers: '...',
+    callsToday: '...',
+    activeBulletins: '...',
+    pendingRegistrations: 0,
+    listenTime: '...'
+  });
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [statsRes, notificationsRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/stats`),
+          axios.get(`${API_BASE_URL}/notifications`)
+        ]);
+        setStats(statsRes.data);
+        setNotifications(notificationsRes.data);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const statCards = [
+    { label: 'Total Registered Farmers', value: stats.totalFarmers.toLocaleString(), change: '+12% this month', icon: <Users size={20} />, color: 'var(--primary)' },
+    { label: 'Total Calls Today', value: stats.callsToday.toLocaleString(), change: 'Peak: 7 AM - 9 AM', icon: <PhoneCall size={20} />, color: 'var(--accent)' },
+    { label: 'Active Bulletins', value: stats.activeBulletins.toLocaleString(), change: '8 Districts covered', icon: <Radio size={20} />, color: 'var(--purple)' },
+    { label: 'Avg Listen Time', value: stats.listenTime, change: '85% completion rate', icon: <BarChart3 size={20} />, color: 'var(--accent-light)' },
+  ];
   return (
     <div className="admin-dashboard container">
       <header className="dashboard-header animate-fadein">
@@ -40,7 +80,7 @@ export default function AdminDashboard() {
 
       {/* Stat Cards */}
       <div className="grid-4 stats-row animate-fadein">
-        {STAT_CARDS.map((stat) => (
+        {statCards.map((stat) => (
           <div className="card stat-card" key={stat.label}>
             <div className="stat-card-header">
               <div className="stat-icon" style={{ background: `${stat.color}15`, color: stat.color }}>
@@ -55,9 +95,39 @@ export default function AdminDashboard() {
       </div>
 
       <div className="dashboard-grid animate-fadein">
-        {/* Main Feed */}
+        {/* Notifications and Alerts */}
         <div className="dashboard-main">
           <div className="card table-card">
+            <div className="card-header">
+              <h3>System Notifications</h3>
+              <button className="btn btn-ghost btn-sm">Mark All Read</button>
+            </div>
+            <div className="notifications-list">
+              {notifications.length === 0 ? (
+                <div className="empty-state">No new notifications</div>
+              ) : (
+                notifications.map((notif) => (
+                  <div className={`notification-item ${notif.isRead ? 'read' : 'unread'}`} key={notif.id}>
+                    <div className="notif-icon">
+                      <Bell size={18} />
+                    </div>
+                    <div className="notif-content">
+                      <div className="notif-header">
+                        <h4>{notif.title}</h4>
+                        <span className="notif-time">
+                          {notif.createdAt && new Date(notif.createdAt._seconds * 1000 || notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p>{notif.message}</p>
+                    </div>
+                    {!notif.isRead && <div className="unread-dot"></div>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="card table-card" style={{marginTop: '24px'}}>
             <div className="card-header">
               <h3>Live Call Feed</h3>
               <button className="btn btn-ghost btn-sm">View All</button>
@@ -102,7 +172,7 @@ export default function AdminDashboard() {
             <h3>Quick Actions</h3>
             <div className="actions-list">
               {QUICK_ACTIONS.map((action) => (
-                <div className="action-item" key={action.title}>
+                <div className="action-item" key={action.title} onClick={() => action.path !== '#' && navigate(action.path)} style={{cursor: action.path !== '#' ? 'pointer' : 'default'}}>
                   <div className="action-icon">{action.icon}</div>
                   <div className="action-info">
                     <h4>{action.title}</h4>
@@ -118,9 +188,11 @@ export default function AdminDashboard() {
             <div className="upgrade-icon">
               <TrendingUp size={24} />
             </div>
-            <h4>Reach More Villages</h4>
-            <p>You have 3 pending registration requests from Bihar. Review and activate them to scale impact.</p>
-            <button className="btn btn-accent btn-sm w-full" style={{marginTop: '12px', width: '100%', justifyContent: 'center'}}>Review Requests</button>
+            <h4>Village Registration</h4>
+            <p>You have {stats.pendingRegistrations} pending registration requests. Review and activate them to scale impact.</p>
+            <button className="btn btn-accent btn-sm w-full" style={{marginTop: '12px', width: '100%', justifyContent: 'center'}}>
+              {stats.pendingRegistrations > 0 ? 'Review Requests' : 'All Caught Up'}
+            </button>
           </div>
         </div>
       </div>

@@ -5,7 +5,8 @@ export const COLLECTIONS = {
   USERS: 'users',
   FARMERS: 'farmers',
   BULLETINS: 'bulletins',
-  CALL_LOGS: 'call_logs'
+  CALL_LOGS: 'call_logs',
+  NOTIFICATIONS: 'notifications'
 };
 
 // Helper to get collection reference
@@ -17,3 +18,4 @@ export const User = db.collection(COLLECTIONS.USERS);
 export const Farmer = db.collection(COLLECTIONS.FARMERS);
 export const Bulletin = db.collection(COLLECTIONS.BULLETINS);
 export const CallLog = db.collection(COLLECTIONS.CALL_LOGS);
+export const Notification = db.collection(COLLECTIONS.NOTIFICATIONS);

@@ -3,7 +3,7 @@ import admin from 'firebase-admin';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
-import { User, Bulletin, CallLog, Farmer } from './models/index.js';
+import { User, Bulletin, CallLog, Farmer, Notification } from './models/index.js';
 import { initCronJobs } from './cron.js';
 import { generateAudioBulletin } from './services/ttsService.js';
 import exotelRouter from './exotel_ivr.js';
@@ -98,6 +98,17 @@ app.post('/api/register', async (req, res) => {
     } else {
       data.role = 'panchayat';
       const docRef = await User.add(data);
+      
+      // Create a notification for the admin
+      await Notification.add({
+        title: 'New Village Registration',
+        message: `${formData.panchayatName} in ${formData.district} has requested registration.`,
+        type: 'registration',
+        relatedId: docRef.id,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
       res.status(201).json({ message: 'Panchayat registration successful', id: docRef.id, user: data });
     }
   } catch (err) {
@@ -110,6 +121,7 @@ app.get('/api/stats', async (req, res) => {
   try {
     const farmerSnapshot = await Farmer.count().get();
     const activeBulletinsSnapshot = await Bulletin.where('isActive', '==', true).count().get();
+    const pendingPanchayatsSnapshot = await User.where('isVerified', '==', false).count().get();
     
     // For call count today, we need a date check
     const today = new Date();
@@ -120,8 +132,29 @@ app.get('/api/stats', async (req, res) => {
       totalFarmers: farmerSnapshot.data().count,
       callsToday: callsTodaySnapshot.data().count,
       activeBulletins: activeBulletinsSnapshot.data().count,
-      listenTime: '2m 45s' // Mocked
+      pendingRegistrations: pendingPanchayatsSnapshot.data().count,
+      listenTime: '2m 45s' // Mocked but consistent
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Notifications
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const snapshot = await Notification.orderBy('createdAt', 'desc').limit(20).get();
+    const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/notifications/:id/read', async (req, res) => {
+  try {
+    await Notification.doc(req.params.id).update({ isRead: true });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
