@@ -16,14 +16,14 @@ const PROMPTS = {
     loadingError: "क्षमा करें, हम तकनीकी खराबी का सामना कर रहे हैं। कृपया बाद में प्रयास करें।"
   },
   English: {
-    welcomeUnregistered: (from) => `Welcome to GraamVaani. Your number ${from.split('').join(' ')} is not recognized. Please register online.`,
+    welcomeUnregistered: (from, proj) => `Welcome. Your number ${from.split('').join(' ')} not found in GraamVaani project ${proj || 'unknown'}. Please register online.`,
     welcomeRegistered: (name, category, lang) => `Namaste ${name}, welcome back to GraamVaani. Playing your ${category} news in ${lang}.`,
     noBulletin: (lang) => `Welcome back. We don't have a new bulletin for you yet in ${lang}. Please check back later.`,
     loadingError: "Sorry, we are experiencing technical difficulties. Please call again later."
   }
 };
 
-const VERSION = "1.1.2"; // Used to verify if the user is hitting the latest deployment
+const VERSION = "1.1.3"; // Diagnostic Version
 
 /**
  * @route   POST /ivr
@@ -31,11 +31,27 @@ const VERSION = "1.1.2"; // Used to verify if the user is hitting the latest dep
  * @access  Public (Exotel Passthru)
  */
 router.all('/', async (req, res) => {
-  // 🚀 1. DIAGNOSTIC LOGGING (Essential for debugging "PassThru Key" issues)
-  console.log('--- 📞 NEW INCOMING IVR CALL ---');
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Payload (Query):', JSON.stringify(req.query, null, 2));
-  console.log('Payload (Body):', JSON.stringify(req.body, null, 2));
+  // 🚀 1. DIAGNOSTIC LOGGING (Essential for debugging)
+  const timestamp = new Date().toISOString();
+  const requestId = `call-${Date.now()}`;
+  console.log(`--- 📞 NEW INCOMING IVR CALL [${VERSION}] ---`);
+  
+  // 💾 NEW: Record debug log to Firestore (if DB is init)
+  try {
+    if (db) {
+       await db.collection('debug_calls').doc(requestId).set({
+         timestamp,
+         version: VERSION,
+         headers: req.headers,
+         query: req.query,
+         body: req.body,
+         method: req.method
+       }, { merge: true });
+       console.log(`💾 Debug log saved to Firestore: debug_calls/${requestId}`);
+    }
+  } catch (logErr) {
+    console.error('⚠️ Failed to save debug log:', logErr.message);
+  }
 
   // 🚀 1.1 ENFORCE API AUTHENTICATION (Basic Auth)
   const authHeader = req.headers.authorization;
@@ -183,13 +199,14 @@ router.all('/', async (req, res) => {
     const isXmlRequested = getParam('xml') === 'true' || getParam('format') === 'xml';
 
     if (!user) {
-      console.error(`❌ DENIED: ${from} not found in DB [VER: ${VERSION}]`);
+      const projId = admin.apps[0]?.options.credential?.projectId || 'Unknown';
+      console.error(`❌ DENIED: ${from} not found in DB [VER: ${VERSION}, PROJ: ${projId}]`);
       
       if (isXmlRequested) {
         res.set('Content-Type', 'text/xml');
         return res.send(`
           <Response>
-            <Say voice="Polite">${prompts.welcomeUnregistered(from)}</Say>
+            <Say voice="Polite">${prompts.welcomeUnregistered(from, projId)}</Say>
             <Hangup />
           </Response>
         `.trim());
