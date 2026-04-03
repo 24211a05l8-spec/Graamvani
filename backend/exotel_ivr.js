@@ -20,6 +20,12 @@ const PROMPTS = {
     welcomeRegistered: (name, category, lang) => `Namaste ${name}, welcome back to GraamVaani. Playing your ${category} news in ${lang}.`,
     noBulletin: (lang) => `Welcome back. We don't have a new bulletin for you yet in ${lang}. Please check back later.`,
     loadingError: "Sorry, we are experiencing technical difficulties. Please call again later."
+  },
+  Telugu: {
+    welcomeUnregistered: (from, proj) => `వాయిస్ రివల్యూషన్ కు స్వాగతం. మీ నెంబర్ ${from.split('').join(' ')} మావద్ద నమోదు కాలేదు. ప్రాజెక్ట్ ${proj}.`,
+    welcomeRegistered: (name, category, lang) => `నమస్తే ${name}, గ్రామ్వాణి కి స్వాగతం. మీ కోసం ${category} వార్తలు వినండి.`,
+    noBulletin: (lang) => `నమస్తే. ప్రస్తుతం కొత్త బులెటిన్ అందుబాటులో లేదు.`,
+    loadingError: "క్షమించండి, సాంకేతిక సమస్య ఎదురైంది."
   }
 };
 
@@ -131,28 +137,37 @@ router.all('/', async (req, res) => {
     let user = null;
     let collectionName = '';
 
-    // 🚀 STEP 1: Identify the User
+    // 🚀 STEP 1: Identify the User (TRIPLE REDUNDANCY)
     console.log(`📡 Searching DB for "${from}"...`);
     const fromNum = parseInt(from, 10);
     
-    // Check Farmers & Users
+    // Check Farmers & Users with all possible formats
     const queries = [
-      activeDb.collection('farmers').where('phone', '==', from).get(),
-      activeDb.collection('farmers').where('phone', '==', fromNum).get(),
+      activeDb.collection('farmers').where('phone', '==', from).get(),       // String match
+      activeDb.collection('farmers').where('phone', '==', fromNum).get(),    // Number match
+      activeDb.collection('farmers').where('phone', '==', rawFrom).get(),    // Literal match
       activeDb.collection('users').where('phone', '==', from).get(),
       activeDb.collection('users').where('phone', '==', fromNum).get(),
-      // 🆕 Added support for "contactPhone" (Panchayat registrations)
       activeDb.collection('users').where('contactPhone', '==', from).get(),
       activeDb.collection('users').where('contactPhone', '==', fromNum).get()
     ];
     
     const results = await Promise.all(queries);
+    
+    // Log sizes for debugging
+    if (db) {
+      await db.collection('debug_calls').doc(requestId).set({
+        matchResults: results.map(s => s.size),
+        searchStrings: { from, fromNum, rawFrom }
+      }, { merge: true });
+    }
+
     const userDocMatch = results.find(snap => !snap.empty)?.docs[0];
     
     if (userDocMatch) {
       user = userDocMatch.data();
       collectionName = userDocMatch.ref.parent.id;
-      const matchField = user.phone === from || user.phone === fromNum ? 'phone' : 'contactPhone';
+      const matchField = user.phone === from || user.phone === fromNum || user.phone === rawFrom ? 'phone' : 'contactPhone';
       console.log(`✅ Identified by ${matchField} in ${collectionName}: ${from} -> ${user.name || user.panchayatName}`);
     }
 
