@@ -25,6 +25,7 @@ app.use(morgan('dev'));
 // Note: Firebase is initialized in firebase.js and imported via models/index.js
 
 // 2. MIDDLEWARE & ROUTES
+app.get('/api/ivr/version', (req, res) => res.json({ status: 'ok', version: "1.1.2", timestamp: new Date().toISOString() }));
 app.use('/api/ivr', exotelRouter); // specialized exotel route
 
 // --- API ROUTES ---
