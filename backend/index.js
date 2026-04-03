@@ -26,14 +26,17 @@ app.use(morgan('dev'));
 
 // 2. MIDDLEWARE & ROUTES
 app.get('/api/ivr/version', (req, res) => {
-  const admin = require('firebase-admin');
-  const projectId = admin.apps.length ? admin.apps[0].options.credential?.projectId || 'Unknown (Check env)' : 'Firebase Not Init';
-  res.json({ 
-    status: 'ok', 
-    version: "1.1.3", 
-    projectId: projectId,
-    timestamp: new Date().toISOString() 
-  });
+  try {
+    const projectId = admin.apps.length ? admin.apps[0].options.projectId || 'Unknown (Check env)' : 'Firebase Not Init';
+    res.json({ 
+      status: 'ok', 
+      version: "1.1.4", 
+      projectId: projectId,
+      timestamp: new Date().toISOString() 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: process.env.NODE_ENV === 'development' ? err.stack : undefined });
+  }
 });
 app.use('/api/ivr', exotelRouter); // specialized exotel route
 
