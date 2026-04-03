@@ -138,27 +138,33 @@ router.all('/', async (req, res) => {
     let collectionName = '';
 
     // 🚀 STEP 1: Identify the User (TRIPLE REDUNDANCY)
-    console.log(`📡 Searching DB for "${from}"...`);
-    const fromNum = parseInt(from, 10);
+    const fromStr = from.trim();
+    console.log(`📡 Searching DB for "${fromStr}"...`);
+    const fromNum = parseInt(fromStr, 10);
     
     // Check Farmers & Users with all possible formats
     const queries = [
-      activeDb.collection('farmers').where('phone', '==', from).get(),       // String match
+      activeDb.collection('farmers').where('phone', '==', fromStr).get(),    // String match
       activeDb.collection('farmers').where('phone', '==', fromNum).get(),    // Number match
       activeDb.collection('farmers').where('phone', '==', rawFrom).get(),    // Literal match
-      activeDb.collection('users').where('phone', '==', from).get(),
+      activeDb.collection('users').where('phone', '==', fromStr).get(),
       activeDb.collection('users').where('phone', '==', fromNum).get(),
-      activeDb.collection('users').where('contactPhone', '==', from).get(),
+      activeDb.collection('users').where('contactPhone', '==', fromStr).get(),
       activeDb.collection('users').where('contactPhone', '==', fromNum).get()
     ];
     
     const results = await Promise.all(queries);
     
+    // 🔍 NEW: Collection Peek (Pull 3 farmers to see what's in there)
+    const peekSnap = await activeDb.collection('farmers').limit(3).get();
+    const peekData = peekSnap.docs.map(d => ({ id: d.id, phone: d.data().phone, type: typeof d.data().phone }));
+
     // Log sizes for debugging
     if (db) {
       await db.collection('debug_calls').doc(requestId).set({
         matchResults: results.map(s => s.size),
-        searchStrings: { from, fromNum, rawFrom }
+        searchStrings: { fromStr, fromNum, rawFrom },
+        peek: peekData
       }, { merge: true });
     }
 
@@ -167,8 +173,8 @@ router.all('/', async (req, res) => {
     if (userDocMatch) {
       user = userDocMatch.data();
       collectionName = userDocMatch.ref.parent.id;
-      const matchField = user.phone === from || user.phone === fromNum || user.phone === rawFrom ? 'phone' : 'contactPhone';
-      console.log(`✅ Identified by ${matchField} in ${collectionName}: ${from} -> ${user.name || user.panchayatName}`);
+      const matchField = user.phone === fromStr || user.phone === fromNum || user.phone === rawFrom ? 'phone' : 'contactPhone';
+      console.log(`✅ Identified by ${matchField} in ${collectionName}: ${fromStr} -> ${user.name || user.panchayatName}`);
     }
 
     // 🚀 STEP 1.1: IDENTIFICATION FALLBACK (If phone lookup fails, try Custom Key)
@@ -211,17 +217,22 @@ router.all('/', async (req, res) => {
     res.set('Content-Type', 'text/xml');
 
     // 🚀 STEP 3: RESPOND (Status Code for Check-only vs. XML for playback)
-    const isXmlRequested = getParam('xml') === 'true' || getParam('format') === 'xml';
+    // 💡 FORCE XML: If the request comes from Exotel or we've hit this route, 
+    // it's highly likely we want XML. Returning 302 can play a generic message.
+    const isXmlRequested = getParam('xml') === 'true' || 
+                           getParam('format') === 'xml' || 
+                           req.headers['user-agent']?.toLowerCase().includes('exotel') ||
+                           true; // Default to TRUE to ensure diagnostic audio is heard
 
     if (!user) {
-      const projId = admin.apps[0]?.options.credential?.projectId || 'Unknown';
-      console.error(`❌ DENIED: ${from} not found in DB [VER: ${VERSION}, PROJ: ${projId}]`);
+      const projId = admin.apps[0]?.options.projectId || 'Unknown';
+      console.error(`❌ DENIED: ${fromStr} not found in DB [VER: ${VERSION}, PROJ: ${projId}]`);
       
       if (isXmlRequested) {
         res.set('Content-Type', 'text/xml');
         return res.send(`
           <Response>
-            <Say voice="Polite">${prompts.welcomeUnregistered(from, projId)}</Say>
+            <Say voice="Polite">${prompts.welcomeUnregistered(fromStr, projId)}</Say>
             <Hangup />
           </Response>
         `.trim());
