@@ -37,7 +37,7 @@ export default function Navbar() {
               {l.label}
             </Link>
           ))}
-          <a href="tel:04041895241" className="btn btn-primary btn-sm">
+          <a href="tel:09513886363" className="btn btn-primary btn-sm">
             <Phone size={14} />
             Demo Call
           </a>

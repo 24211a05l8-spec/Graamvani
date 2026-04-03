@@ -4,9 +4,7 @@ import Navbar from '../components/Navbar';
 import './LandingPage.css';
 
 const HOTLINES = [
-  { number: '04041895241', label: 'Local Village News', lang: 'Auto-detected', color: '#f97316' },
-  { number: '04041895242', label: 'National News Today', lang: 'Hindi / English', color: '#10b981' },
-  { number: '04041895243', label: 'Global Hot Topics (War/Policy)', lang: 'Multi-language', color: '#8b5cf6' },
+  { number: '09513886363', label: 'Local Village News', lang: 'Auto-detected', color: '#f97316' },
 ];
 
 const HOW_STEPS = [

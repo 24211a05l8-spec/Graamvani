@@ -110,9 +110,9 @@ router.all('/', async (req, res) => {
     const calledNumber = req.body.To || req.query.To || '';
     let category = 'local';
     
-    // Suffix-based routing (if you have multiple numbers for categories)
-    if (calledNumber.endsWith('243')) category = 'global';
-    else if (calledNumber.endsWith('242')) category = 'national';
+    // Category detection (defaults to local unless more numbers are added)
+    // if (calledNumber.endsWith('243')) category = 'global';
+    // else if (calledNumber.endsWith('242')) category = 'national';
 
     console.log(`✅ Registered user: ${userName} (Routing to ${category} in ${userLang})`);
 
