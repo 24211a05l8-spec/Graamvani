@@ -35,9 +35,10 @@ if (!admin.apps.length) {
 
     if (serviceAccount) {
       admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id
       });
-      console.log('✅ Connected to Firebase Firestore');
+      console.log(`✅ Connected to Firebase Project: ${serviceAccount.project_id}`);
     } else {
       console.error('❌ CRITICAL: No Firebase configuration found! Please provide firebase-key.json or FIREBASE_SERVICE_ACCOUNT env var.');
     }
