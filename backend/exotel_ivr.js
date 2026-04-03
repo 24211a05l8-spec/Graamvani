@@ -29,27 +29,78 @@ const PROMPTS = {
  * @access  Public (Exotel Passthru)
  */
 router.all('/', async (req, res) => {
-  // 1. Extract Caller Info & Forced Language from Exotel
+  // 🚀 1. DIAGNOSTIC LOGGING (Essential for debugging "PassThru Key" issues)
   console.log('--- 📞 NEW INCOMING IVR CALL ---');
-  
-  // Exotel sends data in Body (POST) or Query (GET)
-  const rawFrom = req.body.From || req.query.From || 
-                  req.body.from || req.query.from || 
-                  req.body.Caller || req.query.Caller || 
-                  req.body.phoneNumber || req.query.phoneNumber;
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Payload (Query):', JSON.stringify(req.query, null, 2));
+  console.log('Payload (Body):', JSON.stringify(req.body, null, 2));
 
-  // Potential URL override from Exotel Flow (e.g., ?lang=Hindi)
-  const flowLang = req.query.lang || req.body.lang || null;
+  // 🚀 1.1 ENFORCE API AUTHENTICATION (Basic Auth)
+  const authHeader = req.headers.authorization;
+  const expectedKey = process.env.EXOTEL_API_KEY;
+  const expectedToken = process.env.EXOTEL_API_TOKEN;
+
+  // IMPORTANT: We only enforce if Key/Token are configured in .env
+  if (expectedKey && expectedToken) {
+    if (!authHeader) {
+      console.error('❌ AUTH REJECTED: Missing Authorization header');
+      return res.status(401).send('Unauthorized: Exotel API Key required');
+    }
+
+    const [type, credentials] = authHeader.split(' ');
+    const decoded = Buffer.from(credentials, 'base64').toString();
+    const [user, pass] = decoded.split(':');
+
+    if (user !== expectedKey || pass !== expectedToken) {
+      console.error('❌ AUTH REJECTED: Invalid API Key or Token');
+      return res.status(401).send('Unauthorized: Invalid Credentials');
+    }
+    console.log('✅ AUTH SUCCESS: Valid Exotel Credentials');
+  } else {
+    console.warn('⚠️ AUTH WARNING: EXOTEL_API_KEY or TOKEN missing from .env. Running in unsecure mode.');
+  }
+
+  // 🚀 2. ROBUST PARAMETER EXTRACTION (Case-insensitive & Character-insensitive)
+  // Exotel sometimes sends 'From' and sometimes 'from' or 'Caller'
+  const getParam = (name) => {
+    const normalize = (s) => s?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+    const searchKey = normalize(name);
+    
+    const findIn = (obj) => {
+      if (!obj) return null;
+      const matchKey = Object.keys(obj).find(k => normalize(k) === searchKey);
+      if (matchKey && matchKey.toLowerCase() !== name.toLowerCase()) {
+        console.log(`💡 Param Match: Found "${matchKey}" in payload for requested "${name}"`);
+      }
+      return matchKey ? obj[matchKey] : null;
+    };
+    
+    return findIn(req.body) || findIn(req.query);
+  };
+
+  const rawFrom = getParam('From') || getParam('Caller') || getParam('phoneNumber') || getParam('phone');
+  const flowLang = getParam('lang') || getParam('language');
+  
+  // Checking multiple common Exotel passthru/custom field names
+  const customKey = getParam('key') || 
+                    getParam('village_id') || 
+                    getParam('custom_field') || 
+                    getParam('customfield') || 
+                    getParam('passthru');
+
+  if (customKey) {
+    console.log(`🔑 CUSTOM KEY DETECTED: "${customKey}" (Normalized search matched)`);
+  }
 
   if (!rawFrom) {
     console.warn('❌ CRITICAL: No phone number found in Exotel request!');
     res.set('Content-Type', 'text/xml');
-    return res.send('<Response><Say voice="Polite">Identification failed. Please try again.</Say></Response>');
+    return res.send('<Response><Say voice="Polite">Identification failed. No caller ID detected.</Say></Response>');
   }
 
-  // 1.1 Strict 10-digit normalization
+  // 🚀 3. NORMALIZATION
   const from = rawFrom.replace(/\D/g, '').slice(-10);
-  console.log(`🔎 NORMALIZED: ${rawFrom} -> ${from}`);
+  console.log(`🔎 NORMALIZED CALLER: ${rawFrom} -> ${from}`);
 
   try {
     let activeDb = db;
@@ -80,6 +131,36 @@ router.all('/', async (req, res) => {
     if (userDocMatch) {
       user = userDocMatch.data();
       collectionName = userDocMatch.ref.parent.id;
+      console.log(`✅ Identified by Phone: ${from} -> ${user.name || user.panchayatName}`);
+    }
+
+    // 🚀 STEP 1.1: IDENTIFICATION FALLBACK (If phone lookup fails, try Custom Key)
+    if (!user && customKey) {
+      console.log(`📡 Phone lookup failed. Trying Custom Key identification: "${customKey}"...`);
+      
+      // 1. Try Document ID lookup in 'users' (Panchayats)
+      const villageDoc = await activeDb.collection('users').doc(customKey).get();
+      if (villageDoc.exists) {
+        user = villageDoc.data();
+        collectionName = 'users';
+        console.log(`✅ IDENTIFIED BY CUSTOM KEY (DOC ID): ${user.panchayatName}`);
+      } else {
+        // 2. Try 'village_id' field lookup in 'users'
+        const villageSnap = await activeDb.collection('users').where('village_id', '==', customKey).limit(1).get();
+        if (!villageSnap.empty) {
+          user = villageSnap.docs[0].data();
+          collectionName = 'users';
+          console.log(`✅ IDENTIFIED BY CUSTOM KEY (VILLAGE_ID FIELD): ${user.panchayatName}`);
+        } else {
+          // 3. Try checking if it's a Farmer by Document ID
+          const farmerDoc = await activeDb.collection('farmers').doc(customKey).get();
+          if (farmerDoc.exists) {
+            user = farmerDoc.data();
+            collectionName = 'farmers';
+            console.log(`✅ IDENTIFIED BY CUSTOM KEY (FARMER DOC ID): ${user.name}`);
+          }
+        }
+      }
     }
 
     // 🚀 STEP 2: Determine Language (Flow Priority > User Profile > Default)
@@ -92,20 +173,35 @@ router.all('/', async (req, res) => {
     const prompts = PROMPTS[userLang] || PROMPTS.English;
     res.set('Content-Type', 'text/xml');
 
-    // 🚀 STEP 3: Handle Unregistered User
+    // 🚀 STEP 3: RESPOND (Status Code for Check-only vs. XML for playback)
+    const isXmlRequested = getParam('xml') === 'true' || getParam('format') === 'xml';
+
     if (!user) {
-      console.error(`❌ BLOCK: ${from} not found in DB. Flow Language: ${userLang}`);
-      return res.send(`
-        <Response>
-          <Say voice="Polite">${prompts.welcomeUnregistered(from)}</Say>
-          <Hangup />
-        </Response>
-      `.trim());
+      console.error(`❌ DENIED: ${from} not found in DB and no custom key match.`);
+      
+      // If they want XML, return the hangup response. 
+      // Otherwise, return 302 (the standard Exotel Passthru "Failure" code).
+      if (isXmlRequested) {
+        res.set('Content-Type', 'text/xml');
+        return res.send(`
+          <Response>
+            <Hangup />
+          </Response>
+        `.trim());
+      } else {
+        return res.status(302).send('Not Registered');
+      }
     }
 
     console.log(`✅ MATCH: Found ${user.name || 'User'} in ${collectionName}`);
 
-    // 🚀 STEP 4: Routing & Category Detection
+    // If it's a simple check (not XML requested), return 200 (Success)
+    if (!isXmlRequested) {
+      console.log('📡 Sending HTTP 200 OK for registration check.');
+      return res.status(200).send('Registered');
+    }
+
+    // 🚀 STEP 4: Full XML Logic (Playback, etc.)
     const userName = user.name || user.panchayatName || 'User';
     const calledNumber = req.body.To || req.query.To || '';
     let category = 'local';
