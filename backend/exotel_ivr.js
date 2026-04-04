@@ -54,22 +54,32 @@ router.all('/', async (req, res) => {
     ];
 
     const results = await Promise.all(queries);
-    const matchFound = results.some(snap => !snap.empty);
+    const matchedSnap = results.find(snap => !snap.empty);
+    const matchFound = !!matchedSnap;
+    
+    let userVillage = 'Unknown';
+    let userDistrict = 'Unknown';
+    
+    if (matchFound) {
+      const userData = matchedSnap.docs[0].data();
+      userVillage = userData.village || userData.panchayatName || 'Unknown';
+      userDistrict = userData.district || 'Unknown';
+    }
 
     // 🔍 SILENT PEEK (Only for your internal debug logs in Firestore)
     const peekSnap = await activeDb.collection('farmers').limit(5).get();
     const peekData = peekSnap.docs.map(d => ({ id: d.id, phone: d.data().phone, type: typeof d.data().phone }));
 
     // 💾 SAVE DEBUG LOG (Silent)
-    await activeDb.collection('debug_calls').doc(requestId).set({
+    await activeDb.collection('call_logs').doc(requestId).set({
       timestamp,
       version: VERSION,
       fromRaw: rawFrom,
       fromNormalized: fromStr,
-      results: results.map(s => s.size),
+      village: userVillage,
+      district: userDistrict,
       isRegistered: matchFound,
-      peek: peekData,
-      payload: { headers: req.headers, query: req.query, body: req.body }
+      payload: { query: req.query, body: req.body }
     });
 
     // 🚀 4. RESPOND (Pure Yes/No for Exotel Passthru)
@@ -84,6 +94,41 @@ router.all('/', async (req, res) => {
   } catch (err) {
     console.error(`❌ [${VERSION}] CRITICAL ERROR:`, err.message);
     return res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * @route   POST /ivr/action
+ * @desc    Log specific actions (digits pressed) from IVR
+ */
+router.post('/action', async (req, res) => {
+  const { From, Digits, Action } = req.body;
+  const timestamp = new Date().toISOString();
+
+  try {
+    const fromStr = From?.replace(/\D/g, '').slice(-10) || 'Unknown';
+    const actionMap = {
+      '1': 'News Bulletin',
+      '2': 'Weather Update',
+      '3': 'Market Prices',
+      '4': 'Expert Advice'
+    };
+
+    const actionTaken = Action || actionMap[Digits] || `Key ${Digits}`;
+
+    console.log(`🎯 [IVR Action] ${fromStr} -> ${actionTaken}`);
+
+    await db.collection('action_logs').add({
+      phone: fromStr,
+      action: actionTaken,
+      digits: Digits || null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.status(200).send('Action Logged');
+  } catch (err) {
+    console.error('Action logging error:', err);
+    res.status(500).send('Error');
   }
 });
 
