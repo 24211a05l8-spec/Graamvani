@@ -269,6 +269,47 @@ app.get('/api/analytics/detailed', async (req, res) => {
   }
 });
 
+// 4. CALL FEED & SIMULATION
+app.get('/api/calls/recent', async (req, res) => {
+  try {
+    const snapshot = await CallLog.orderBy('timestamp', 'desc').limit(10).get();
+    const calls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(calls);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/debug/simulate-call', async (req, res) => {
+  const { village, action, phone } = req.body;
+  const timestamp = new Date().toISOString();
+  try {
+    // 1. Create Call Log
+    const callData = {
+      timestamp,
+      fromRaw: phone || `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`,
+      village: village || 'Simulated Village',
+      district: 'Demo District',
+      isRegistered: true,
+      duration: `${Math.floor(Math.random() * 3) + 1}m ${Math.floor(Math.random() * 60)}s`
+    };
+    await CallLog.add(callData);
+
+    // 2. Create Action Log
+    if (action) {
+      await admin.firestore().collection('action_logs').add({
+        phone: callData.fromRaw.slice(-10),
+        action: action,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    res.json({ success: true, message: 'Simulation successful', data: callData });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Notifications
 app.get('/api/notifications', async (req, res) => {
   try {
