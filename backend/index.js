@@ -173,7 +173,7 @@ app.get('/api/analytics/detailed', async (req, res) => {
     });
 
     const villageStats = Object.entries(villageImpact)
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, count]) => ({ name, count, trend: 'Stable' }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
@@ -241,11 +241,11 @@ app.get('/api/analytics/detailed', async (req, res) => {
       
       res.json({
         villageStats: villageStats.length > 0 ? villageStats : [
-          { name: 'Katihar', count: 450 },
-          { name: 'Purnia', count: 320 },
-          { name: 'Araria', count: 280 },
-          { name: 'Saharsa', count: 190 },
-          { name: 'Munger', count: 150 }
+          { name: 'Katihar', count: 450, trend: 'High' },
+          { name: 'Purnia', count: 320, trend: 'Medium' },
+          { name: 'Araria', count: 280, trend: 'Stable' },
+          { name: 'Saharsa', count: 190, trend: 'Medium' },
+          { name: 'Munger', count: 150, trend: 'High' }
         ],
         actionStats,
         callTrend: FinalTrend
@@ -253,11 +253,11 @@ app.get('/api/analytics/detailed', async (req, res) => {
     } else {
       res.json({
         villageStats: villageStats.length > 0 ? villageStats : [
-          { name: 'Katihar', count: 450 },
-          { name: 'Purnia', count: 320 },
-          { name: 'Araria', count: 280 },
-          { name: 'Saharsa', count: 190 },
-          { name: 'Munger', count: 150 }
+          { name: 'Katihar', count: 450, trend: 'High' },
+          { name: 'Purnia', count: 320, trend: 'Medium' },
+          { name: 'Araria', count: 280, trend: 'Stable' },
+          { name: 'Saharsa', count: 190, trend: 'Medium' },
+          { name: 'Munger', count: 150, trend: 'High' }
         ],
         actionStats,
         callTrend

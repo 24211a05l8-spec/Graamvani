@@ -94,7 +94,7 @@ export default function AnalyticsPage() {
 
       {/* Metric Summary Cards */}
       <div className="grid-4 metric-row animate-fadein">
-        {data.summary.map((stat, i) => (
+        {(data.summary || []).map((stat, i) => (
           <div className="card metric-card" key={i}>
             <div className="metric-icon" style={{ color: stat.color, background: `${stat.color}15` }}>
               {stat.icon}
@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
               <span className="metric-label">{stat.label}</span>
               <div className="metric-value-wrap">
                 <span className="metric-value">{stat.value}</span>
-                <span className={`metric-trend ${stat.trend.startsWith('+') ? 'up' : 'down'}`}>
+                <span className={`metric-trend ${(stat.trend || '').startsWith('+') ? 'up' : 'down'}`}>
                   {stat.trend}
                 </span>
               </div>
@@ -128,7 +128,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="chart-container" style={{ height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.callTrend}>
+                <AreaChart data={data.callTrend || []}>
                   <defs>
                     <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3}/>
@@ -156,7 +156,7 @@ export default function AnalyticsPage() {
               </div>
               <div className="chart-container" style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.districtStats} layout="vertical">
+                  <BarChart data={data.districtStats || []} layout="vertical">
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" stroke="var(--text-muted)" fontSize={10} width={80} tickLine={false} axisLine={false} />
                     <Tooltip 
@@ -178,13 +178,13 @@ export default function AnalyticsPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={data.actionStats}
+                      data={data.actionStats || []}
                       innerRadius={50}
                       outerRadius={75}
                       paddingAngle={8}
                       dataKey="value"
                     >
-                      {data.actionStats.map((entry, index) => (
+                      {(data.actionStats || []).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -209,18 +209,18 @@ export default function AnalyticsPage() {
             </div>
             
             <div className="village-grid">
-              {data.villageStats.map((village, idx) => (
+              {(data.villageStats || []).map((village, idx) => (
                 <div className="village-node" key={idx}>
                   <div className="node-info">
                     <h4>{village.name}</h4>
-                    <span>{village.trend} Growth</span>
+                    <span>{village.trend || 'Stable'} Growth</span>
                   </div>
                   <div className="node-stats">
                     <div className="node-val">
                       <strong>{village.count}</strong>
                       <span>Impact</span>
                     </div>
-                    <div className={`node-indicator ${village.trend.toLowerCase()}`}></div>
+                    <div className={`node-indicator ${(village.trend || 'Stable').toLowerCase()}`}></div>
                   </div>
                 </div>
               ))}
